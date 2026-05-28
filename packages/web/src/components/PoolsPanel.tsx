@@ -1,14 +1,11 @@
 import { Database } from '@phosphor-icons/react'
 import type { Address } from 'viem'
 import type { PoolPortfolio } from '../hooks/useVaultPortfolio'
-import { explorerAddress } from '../utils/explorer'
 import {
   formatAddress,
-  formatBps,
   formatInteger,
   formatPercentFromFeeUnits,
   formatPoolId,
-  formatTimestamp,
   formatTokenAmount,
 } from '../utils/format'
 import { PoolDepositForm } from './PoolDepositForm'
@@ -79,8 +76,6 @@ export function PoolsPanel({
                 <th>Range</th>
                 <th>Liquidity</th>
                 <th>Idle Balance</th>
-                <th>Risk Limits</th>
-                <th>Hook</th>
                 <th>Deposit</th>
               </tr>
             </thead>
@@ -133,9 +128,7 @@ function PoolRow({
     <tr>
       <td>
         <div className="pool-cell">
-          <a className="pool-id" href={explorerAddress(chainId, pool.key?.hooks)} target="_blank" rel="noreferrer">
-            {formatPoolId(pool.poolId)}
-          </a>
+          <span className="pool-id">{formatPoolId(pool.poolId)}</span>
           <span className="pair-label">
             {token0} / {token1}
           </span>
@@ -162,17 +155,6 @@ function PoolRow({
         <span>
           {formatTokenAmount(pool.balance?.idle1, pool.token1?.decimals)} {token1}
         </span>
-      </td>
-      <td>
-        <span>width {pool.strategy ? `${pool.strategy.minWidth}-${pool.strategy.maxWidth}` : '-'}</span>
-        <span>
-          move {pool.strategy?.maxTickMovePerRebalance ?? '-'} · slip {formatBps(pool.strategy?.maxSlippageBps)}
-        </span>
-      </td>
-      <td>
-        <StatusBadge state={pool.registered ? 'good' : 'warn'} label={pool.registered ? 'Registered' : 'Unchecked'} />
-        <span className="muted">swaps {formatInteger(pool.swapCount)}</span>
-        <span className="muted">rebalance {formatTimestamp(pool.lastRebalanceTimestamp)}</span>
       </td>
       <td className="deposit-cell">
         <PoolDepositForm

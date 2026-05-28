@@ -370,14 +370,12 @@ dt {
   padding-bottom: 14px;
 }
 
-.text-link,
-.pool-id {
+.text-link {
   color: var(--blue-text);
   text-decoration: none;
 }
 
-.text-link:hover,
-.pool-id:hover {
+.text-link:hover {
   text-decoration: underline;
 }
 
@@ -567,7 +565,7 @@ dt {
 
 table {
   border-collapse: collapse;
-  min-width: 1240px;
+  min-width: 980px;
   width: 100%;
 }
 
@@ -603,6 +601,11 @@ tbody tr:last-child td {
   align-items: flex-start;
   flex-direction: column;
   gap: 3px;
+}
+
+.pool-id {
+  color: var(--blue-text);
+  font-family: var(--font-mono);
 }
 
 .deposit-cell {
@@ -649,13 +652,6 @@ tbody tr:last-child td {
 
 .deposit-inputs input[aria-invalid='true'] {
   border-color: var(--red-text);
-}
-
-.deposit-meta {
-  color: var(--text-soft);
-  display: grid;
-  font-size: 0.75rem;
-  gap: 2px;
 }
 
 .deposit-submit {

@@ -1,13 +1,27 @@
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react'
 import { CheckCircle, CircleNotch, Coins } from '@phosphor-icons/react'
-import { BaseError, formatUnits, parseUnits, zeroAddress, type Address, type Hash } from 'viem'
+import { BaseError, parseUnits, zeroAddress, type Address, type Hash } from 'viem'
 import { useReadContract, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
 import { erc20Abi, userLPVaultAbi } from '../contracts/abis'
 import type { PoolPortfolio } from '../hooks/useVaultPortfolio'
-import { explorerTransaction } from '../utils/explorer'
-import { formatAddress, formatPoolId, formatTokenAmount } from '../utils/format'
+import { formatAddress } from '../utils/format'
 
-type TransactionKind = 'approve0' | 'approve1' | 'deposit'
+type DepositStep =
+  | {
+      kind: 'approve0'
+      tokenAddress: Address
+      amount: bigint
+    }
+  | {
+      kind: 'approve1'
+      tokenAddress: Address
+      amount: bigint
+    }
+  | {
+      kind: 'deposit'
+      amount0: bigint
+      amount1: bigint
+    }
 
 type ParsedAmount = {
   amount: bigint
@@ -44,9 +58,11 @@ export function PoolDepositForm({
   const token1Label = tokenLabel(pool, 'token1')
   const [amount0Input, setAmount0Input] = useState('')
   const [amount1Input, setAmount1Input] = useState('')
-  const [transactionKind, setTransactionKind] = useState<TransactionKind>()
+  const [activeStepKind, setActiveStepKind] = useState<DepositStep['kind']>()
   const handledHash = useRef<Hash | undefined>(undefined)
-  const submittedKind = useRef<TransactionKind | undefined>(undefined)
+  const activeStep = useRef<DepositStep | undefined>(undefined)
+  const depositSteps = useRef<DepositStep[]>([])
+  const depositStepIndex = useRef(0)
 
   const amount0State = useMemo(() => parseDepositAmount(amount0Input, token0Decimals, token0Label), [
     amount0Input,
@@ -130,12 +146,7 @@ export function PoolDepositForm({
   const amountError = amount0State.error ?? amount1State.error
   const formError = amountError ?? balanceError
   const buttonBusy = isPending || isConfirming
-  const confirmedKind = isConfirmed ? transactionKind : undefined
-  const primaryAction = needsToken0Approval
-    ? ({ kind: 'approve0', label: `Approve ${token0Label}` } as const)
-    : needsToken1Approval
-      ? ({ kind: 'approve1', label: `Approve ${token1Label}` } as const)
-      : ({ kind: 'deposit', label: 'Deposit' } as const)
+  const depositConfirmed = isConfirmed && activeStepKind === 'deposit'
   const canSubmit = Boolean(
     owner &&
       vaultAddress &&
@@ -145,6 +156,33 @@ export function PoolDepositForm({
       hasAmount &&
       !formError &&
       !buttonBusy,
+  )
+
+  const runDepositStep = useCallback(
+    (step: DepositStep) => {
+      activeStep.current = step
+      setActiveStepKind(step.kind)
+
+      if (step.kind !== 'deposit') {
+        writeContract({
+          address: step.tokenAddress,
+          abi: erc20Abi,
+          functionName: 'approve',
+          args: [vaultAddress as Address, step.amount],
+          chainId,
+        })
+        return
+      }
+
+      writeContract({
+        address: vaultAddress as Address,
+        abi: userLPVaultAbi,
+        functionName: 'deposit',
+        args: [pool.poolId, step.amount0, step.amount1],
+        chainId,
+      })
+    },
+    [chainId, pool.poolId, vaultAddress, writeContract],
   )
 
   useEffect(() => {
@@ -159,18 +197,25 @@ export function PoolDepositForm({
     void token0Allowance.refetch()
     void token1Allowance.refetch()
 
-    if (submittedKind.current === 'deposit') {
+    if (activeStep.current?.kind === 'deposit') {
       void onDeposit()
+      return
+    }
+
+    depositStepIndex.current += 1
+    const nextStep = depositSteps.current[depositStepIndex.current]
+    if (nextStep) {
+      runDepositStep(nextStep)
     }
   }, [
     hash,
     isConfirmed,
     onDeposit,
+    runDepositStep,
     token0Allowance,
     token0Balance,
     token1Allowance,
     token1Balance,
-    transactionKind,
   ])
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -185,48 +230,33 @@ export function PoolDepositForm({
       return
     }
 
-    setTransactionKind(primaryAction.kind)
-    submittedKind.current = primaryAction.kind
-
-    if (primaryAction.kind === 'approve0') {
-      writeContract({
-        address: token0Address,
-        abi: erc20Abi,
-        functionName: 'approve',
-        args: [vaultAddress, amount0],
-        chainId,
-      })
-      return
-    }
-
-    if (primaryAction.kind === 'approve1') {
-      writeContract({
-        address: token1Address,
-        abi: erc20Abi,
-        functionName: 'approve',
-        args: [vaultAddress, amount1],
-        chainId,
-      })
-      return
-    }
-
-    writeContract({
-      address: vaultAddress,
-      abi: userLPVaultAbi,
-      functionName: 'deposit',
-      args: [pool.poolId, amount0, amount1],
-      chainId,
+    const steps = buildDepositSteps({
+      amount0,
+      amount1,
+      needsToken0Approval,
+      needsToken1Approval,
+      token0Address,
+      token1Address,
     })
+
+    depositSteps.current = steps
+    depositStepIndex.current = 0
+    handledHash.current = undefined
+
+    const firstStep = steps[0]
+    if (firstStep) {
+      runDepositStep(firstStep)
+    }
   }
 
   function handleAmount0Change(value: string) {
     setAmount0Input(value)
-    setTransactionKind(undefined)
+    setActiveStepKind(undefined)
   }
 
   function handleAmount1Change(value: string) {
     setAmount1Input(value)
-    setTransactionKind(undefined)
+    setActiveStepKind(undefined)
   }
 
   return (
@@ -241,6 +271,7 @@ export function PoolDepositForm({
             value={amount0Input}
             placeholder="0"
             autoComplete="off"
+            disabled={buttonBusy}
             aria-invalid={Boolean(amount0State.error || balanceError?.includes(token0Label))}
             onChange={(event) => handleAmount0Change(event.target.value)}
           />
@@ -254,19 +285,11 @@ export function PoolDepositForm({
             value={amount1Input}
             placeholder="0"
             autoComplete="off"
+            disabled={buttonBusy}
             aria-invalid={Boolean(amount1State.error || balanceError?.includes(token1Label))}
             onChange={(event) => handleAmount1Change(event.target.value)}
           />
         </label>
-      </div>
-
-      <div className="deposit-meta">
-        <span>
-          Wallet {formatTokenAmount(balance0, token0Decimals)} / {formatTokenAmount(balance1, token1Decimals)}
-        </span>
-        <span>
-          Allowance {formatAllowance(allowance0, token0Decimals)} / {formatAllowance(allowance1, token1Decimals)}
-        </span>
       </div>
 
       {!isWalletOnSelectedChain ? (
@@ -278,22 +301,17 @@ export function PoolDepositForm({
         <button type="submit" className="button button-secondary deposit-submit" disabled={!canSubmit}>
           {buttonBusy ? (
             <CircleNotch className="spin" size={17} />
-          ) : confirmedKind === 'deposit' ? (
+          ) : depositConfirmed ? (
             <CheckCircle size={17} weight="bold" />
           ) : (
             <Coins size={17} weight="bold" />
           )}
-          {buttonLabel(primaryAction.label, transactionKind, isPending, isConfirming)}
+          {buttonLabel(activeStepKind, isPending, isConfirming)}
         </button>
       )}
 
-      {hash ? (
-        <a className="text-link tx-link deposit-status" href={explorerTransaction(chainId, hash)} target="_blank" rel="noreferrer">
-          {formatPoolId(hash)}
-        </a>
-      ) : null}
       {formError ? <p className="form-message form-error deposit-status">{formError}</p> : null}
-      {confirmedKind ? <p className="form-message form-success deposit-status">{successMessage(confirmedKind)}</p> : null}
+      {depositConfirmed ? <p className="form-message form-success deposit-status">Deposit complete.</p> : null}
       {writeError || receiptError ? (
         <p className="form-message form-error deposit-status">{errorMessage(writeError ?? receiptError)}</p>
       ) : null}
@@ -323,32 +341,62 @@ function parseDepositAmount(input: string, decimals: number | undefined, tokenLa
   }
 }
 
-function buttonLabel(label: string, kind: TransactionKind | undefined, isPending: boolean, isConfirming: boolean) {
+function buildDepositSteps({
+  amount0,
+  amount1,
+  needsToken0Approval,
+  needsToken1Approval,
+  token0Address,
+  token1Address,
+}: {
+  amount0: bigint
+  amount1: bigint
+  needsToken0Approval: boolean
+  needsToken1Approval: boolean
+  token0Address: Address
+  token1Address: Address
+}) {
+  const steps: DepositStep[] = []
+
+  if (needsToken0Approval) {
+    steps.push({
+      kind: 'approve0',
+      tokenAddress: token0Address,
+      amount: amount0,
+    })
+  }
+
+  if (needsToken1Approval) {
+    steps.push({
+      kind: 'approve1',
+      tokenAddress: token1Address,
+      amount: amount1,
+    })
+  }
+
+  steps.push({
+    kind: 'deposit',
+    amount0,
+    amount1,
+  })
+
+  return steps
+}
+
+function buttonLabel(stepKind: DepositStep['kind'] | undefined, isPending: boolean, isConfirming: boolean) {
+  if (!stepKind) {
+    return 'Deposit'
+  }
+
   if (isConfirming) {
-    return kind?.startsWith('approve') ? 'Confirming approval' : 'Confirming deposit'
+    return stepKind === 'deposit' ? 'Confirming deposit' : 'Confirming approval'
   }
 
   if (isPending) {
-    return kind?.startsWith('approve') ? 'Approving' : 'Depositing'
+    return stepKind === 'deposit' ? 'Depositing' : 'Preparing deposit'
   }
 
-  return label
-}
-
-function successMessage(kind: TransactionKind) {
-  return kind === 'deposit' ? 'Deposit complete.' : 'Approval complete.'
-}
-
-function formatAllowance(value: bigint | undefined, decimals: number | undefined) {
-  if (value === undefined) {
-    return '-'
-  }
-
-  if (decimals === undefined) {
-    return value.toString()
-  }
-
-  return formatUnits(value, decimals)
+  return 'Deposit'
 }
 
 function errorMessage(error: unknown) {
