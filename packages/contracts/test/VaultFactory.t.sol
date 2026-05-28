@@ -49,10 +49,37 @@ contract VaultFactoryTest is RangePilotTestBase {
         assertEq(vault.poolCount(), 2);
     }
 
+    function test_AIOperatorCanAddPoolToOwnersVault() public {
+        createVaultOnly();
+        PoolKey memory poolKey = initializeSecondPoolWithSameTokens();
+
+        vm.prank(operator);
+        factory.addPoolToVaultFor(owner, poolKey, defaultConfig());
+
+        assertTrue(vault.isPoolEnabled(poolKey.toId()));
+        assertTrue(hook.registeredVaultForPool(poolKey.toId(), address(vault)));
+        assertEq(vault.poolCount(), 1);
+    }
+
+    function test_NonManagerCannotAddPoolToOwnersVault() public {
+        createVaultOnly();
+        PoolKey memory poolKey = initializeSecondPoolWithSameTokens();
+
+        vm.expectRevert(abi.encodeWithSelector(VaultFactory.NotVaultManager.selector, other, owner, address(vault)));
+        vm.prank(other);
+        factory.addPoolToVaultFor(owner, poolKey, defaultConfig());
+    }
+
     function test_CannotAddPoolWithoutVault() public {
         vm.expectRevert(abi.encodeWithSelector(VaultFactory.VaultNotFound.selector, owner));
         vm.prank(owner);
         factory.addPoolToVault(key, defaultConfig());
+    }
+
+    function test_CannotAddPoolForOwnerWithoutVault() public {
+        vm.expectRevert(abi.encodeWithSelector(VaultFactory.VaultNotFound.selector, owner));
+        vm.prank(operator);
+        factory.addPoolToVaultFor(owner, key, defaultConfig());
     }
 
     function test_CannotCreateVaultForAnotherOwner() public {

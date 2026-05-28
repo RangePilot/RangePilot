@@ -28,6 +28,7 @@ contract VaultFactory {
     error NotOwner();
     error VaultAlreadyExists(address owner, address vault);
     error VaultNotFound(address owner);
+    error NotVaultManager(address caller, address owner, address vault);
     error InvalidPoolHook();
 
     constructor(IPoolManager poolManager_, ManagedLPHook hook_, address vaultImplementation_) {
@@ -60,10 +61,14 @@ contract VaultFactory {
     }
 
     function addPoolToVault(PoolKey calldata key, StrategyConfig calldata config) external returns (PoolId poolId) {
-        address vault = userVaults[msg.sender];
-        if (vault == address(0)) revert VaultNotFound(msg.sender);
+        poolId = _addPoolToVaultFor(msg.sender, key, config);
+    }
 
-        poolId = _addPool(msg.sender, vault, key, config);
+    function addPoolToVaultFor(address owner_, PoolKey calldata key, StrategyConfig calldata config)
+        external
+        returns (PoolId poolId)
+    {
+        poolId = _addPoolToVaultFor(owner_, key, config);
     }
 
     function _createVault(address owner_, address aiOperator_) internal returns (address vault) {
@@ -75,6 +80,19 @@ contract VaultFactory {
         isVault[vault] = true;
 
         emit VaultCreated(owner_, aiOperator_, vault, vaultImplementation);
+    }
+
+    function _addPoolToVaultFor(address owner_, PoolKey calldata key, StrategyConfig calldata config)
+        internal
+        returns (PoolId poolId)
+    {
+        address vault = userVaults[owner_];
+        if (vault == address(0)) revert VaultNotFound(owner_);
+
+        address operator = UserLPVault(vault).aiOperator();
+        if (msg.sender != owner_ && msg.sender != operator) revert NotVaultManager(msg.sender, owner_, vault);
+
+        poolId = _addPool(owner_, vault, key, config);
     }
 
     function _addPool(address owner_, address vault, PoolKey calldata key, StrategyConfig calldata config)
