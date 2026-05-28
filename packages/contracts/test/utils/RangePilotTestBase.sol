@@ -108,7 +108,6 @@ abstract contract RangePilotTestBase is Test, HookDeployer {
             maxWidth: 600,
             maxTickMovePerRebalance: 120,
             maxSlippageBps: 500,
-            minRebalanceInterval: 1 hours,
             allowOutOfRangePosition: false
         });
     }

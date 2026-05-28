@@ -3,24 +3,33 @@ pragma solidity ^0.8.26;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {stdJson} from "forge-std/StdJson.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 import {UserLPVault} from "../../src/UserLPVault.sol";
 import {VaultFactory} from "../../src/VaultFactory.sol";
-import {StrategyConfig} from "../../src/libraries/RangePilotTypes.sol";
+import {ActivePosition, RebalancePlan, StrategyConfig} from "../../src/libraries/RangePilotTypes.sol";
 
 contract CreateXLayerTestnetPoolAndBindVault is Script {
     using stdJson for string;
     using StateLibrary for IPoolManager;
+    using SafeERC20 for IERC20;
 
     string internal constant OUTPUT_PATH = "deployments/xlayer-testnet.json";
     uint24 internal constant TESTNET_POOL_FEE = 100;
     int24 internal constant TESTNET_TICK_SPACING = 1;
     uint160 internal constant TESTNET_SQRT_PRICE_X96 = 79228162514264337593543950336;
+    int24 internal constant INITIAL_TICK_LOWER = -100;
+    int24 internal constant INITIAL_TICK_UPPER = 100;
+    uint256 internal constant INITIAL_AMOUNT0 = 5_000_000;
+    uint256 internal constant INITIAL_AMOUNT1 = 5_000_000;
 
     function run() external returns (PoolId poolId, int24 initialTick) {
         IPoolManager poolManager = IPoolManager(
@@ -59,6 +68,10 @@ contract CreateXLayerTestnetPoolAndBindVault is Script {
         (uint160 currentSqrtPriceX96, int24 currentTick,,) = poolManager.getSlot0(poolId);
         bool poolAlreadyInitialized = currentSqrtPriceX96 != 0;
         bool vaultAlreadyBound = UserLPVault(vault).isPoolEnabled(poolId);
+        uint128 poolLiquidityBefore = poolAlreadyInitialized ? poolManager.getLiquidity(poolId) : 0;
+        uint128 vaultPositionLiquidityBefore;
+        bool initialLiquidityAdded;
+        uint128 initialLiquidity;
 
         vm.startBroadcast();
         (, address broadcaster,) = vm.readCallers();
@@ -75,12 +88,23 @@ contract CreateXLayerTestnetPoolAndBindVault is Script {
             PoolId addedPoolId = factory.addPoolToVault(key, config);
             require(PoolId.unwrap(addedPoolId) == PoolId.unwrap(poolId), "POOL_ID_MISMATCH");
         }
+
+        ActivePosition memory vaultPositionBefore = UserLPVault(vault).getActivePosition(poolId);
+        vaultPositionLiquidityBefore = vaultPositionBefore.liquidity;
+
+        if (poolLiquidityBefore == 0 && vaultPositionLiquidityBefore == 0) {
+            initialLiquidity = _addInitialLiquidity(vault, key, poolId, sqrtPriceX96);
+            initialLiquidityAdded = true;
+        }
         vm.stopBroadcast();
 
         console2.log("Pool initialized and bound");
         console2.logBytes32(PoolId.unwrap(poolId));
         console2.log("Pool already initialized", poolAlreadyInitialized);
         console2.log("Vault already bound", vaultAlreadyBound);
+        console2.log("Initial liquidity already present", poolLiquidityBefore != 0 || vaultPositionLiquidityBefore != 0);
+        console2.log("Initial liquidity added", initialLiquidityAdded);
+        console2.log("Initial liquidity", uint256(initialLiquidity));
         console2.log("Vault", vault);
         console2.log("Vault owner", vaultOwner);
         console2.log("VaultFactory", address(factory));
@@ -95,8 +119,55 @@ contract CreateXLayerTestnetPoolAndBindVault is Script {
 
         _ensureBaseDeployment();
         _writeLatestPool(
-            address(poolManager), hook, address(factory), vault, vaultOwner, key, poolId, sqrtPriceX96, initialTick
+            address(poolManager),
+            hook,
+            address(factory),
+            vault,
+            vaultOwner,
+            key,
+            poolId,
+            sqrtPriceX96,
+            initialTick,
+            poolLiquidityBefore,
+            vaultPositionLiquidityBefore,
+            initialLiquidityAdded,
+            initialLiquidity
         );
+    }
+
+    function _addInitialLiquidity(address vault, PoolKey memory key, PoolId poolId, uint160 sqrtPriceX96)
+        internal
+        returns (uint128 liquidity)
+    {
+        uint160 sqrtLowerX96 = TickMath.getSqrtPriceAtTick(INITIAL_TICK_LOWER);
+        uint160 sqrtUpperX96 = TickMath.getSqrtPriceAtTick(INITIAL_TICK_UPPER);
+
+        liquidity = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96, sqrtLowerX96, sqrtUpperX96, INITIAL_AMOUNT0, INITIAL_AMOUNT1
+        );
+        require(liquidity != 0, "INITIAL_LIQUIDITY_ZERO");
+
+        IERC20(Currency.unwrap(key.currency0)).forceApprove(vault, INITIAL_AMOUNT0);
+        IERC20(Currency.unwrap(key.currency1)).forceApprove(vault, INITIAL_AMOUNT1);
+        UserLPVault(vault).deposit(poolId, INITIAL_AMOUNT0, INITIAL_AMOUNT1);
+        UserLPVault(vault).rebalance(_initialRebalancePlan(poolId, liquidity));
+    }
+
+    function _initialRebalancePlan(PoolId poolId, uint128 liquidity) internal view returns (RebalancePlan memory plan) {
+        plan = RebalancePlan({
+            poolId: poolId,
+            newTickLower: INITIAL_TICK_LOWER,
+            newTickUpper: INITIAL_TICK_UPPER,
+            liquidityToRemove: 0,
+            liquidityToAdd: liquidity,
+            amount0Min: 0,
+            amount1Min: 0,
+            amount0Max: INITIAL_AMOUNT0,
+            amount1Max: INITIAL_AMOUNT1,
+            deadline: block.timestamp + 30 minutes,
+            nonce: uint256(keccak256(abi.encodePacked("xlayer-testnet-initial-liquidity", poolId, block.timestamp))),
+            reasonHash: keccak256("xlayer-testnet-initial-liquidity")
+        });
     }
 
     function _poolKey(address hook) internal view returns (PoolKey memory key) {
@@ -121,7 +192,6 @@ contract CreateXLayerTestnetPoolAndBindVault is Script {
             maxWidth: int24(vm.envOr("MAX_WIDTH", int256(600))),
             maxTickMovePerRebalance: int24(vm.envOr("MAX_TICK_MOVE_PER_REBALANCE", int256(120))),
             maxSlippageBps: uint16(vm.envOr("MAX_SLIPPAGE_BPS", uint256(500))),
-            minRebalanceInterval: uint32(vm.envOr("MIN_REBALANCE_INTERVAL", uint256(1 hours))),
             allowOutOfRangePosition: vm.envOr("ALLOW_OUT_OF_RANGE_POSITION", false)
         });
     }
@@ -176,7 +246,11 @@ contract CreateXLayerTestnetPoolAndBindVault is Script {
         PoolKey memory key,
         PoolId poolId,
         uint160 sqrtPriceX96,
-        int24 initialTick
+        int24 initialTick,
+        uint128 poolLiquidityBefore,
+        uint128 vaultPositionLiquidityBefore,
+        bool initialLiquidityAdded,
+        uint128 initialLiquidity
     ) internal {
         string memory object = "latestPool";
         vm.serializeAddress(object, "poolManager", poolManager);
@@ -190,6 +264,14 @@ contract CreateXLayerTestnetPoolAndBindVault is Script {
         vm.serializeInt(object, "tickSpacing", key.tickSpacing);
         vm.serializeString(object, "sqrtPriceX96", vm.toString(uint256(sqrtPriceX96)));
         vm.serializeInt(object, "tick", initialTick);
+        vm.serializeInt(object, "initialTickLower", INITIAL_TICK_LOWER);
+        vm.serializeInt(object, "initialTickUpper", INITIAL_TICK_UPPER);
+        vm.serializeUint(object, "initialAmount0", INITIAL_AMOUNT0);
+        vm.serializeUint(object, "initialAmount1", INITIAL_AMOUNT1);
+        vm.serializeUint(object, "poolLiquidityBefore", poolLiquidityBefore);
+        vm.serializeUint(object, "vaultPositionLiquidityBefore", vaultPositionLiquidityBefore);
+        vm.serializeBool(object, "initialLiquidityAdded", initialLiquidityAdded);
+        vm.serializeUint(object, "initialLiquidity", initialLiquidity);
         string memory json = vm.serializeBytes32(object, "poolId", PoolId.unwrap(poolId));
         vm.writeJson(json, OUTPUT_PATH, ".latestPool");
     }

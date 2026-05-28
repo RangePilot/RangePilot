@@ -18,7 +18,7 @@
 - `Currency` 编码为 token address
 - `IHooks` 编码为 hook address
 - `PoolKey` 编码为 `(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks)`
-- `StrategyConfig` 编码为 `(int24 minWidth,int24 maxWidth,int24 maxTickMovePerRebalance,uint16 maxSlippageBps,uint32 minRebalanceInterval,bool allowOutOfRangePosition)`
+- `StrategyConfig` 编码为 `(int24 minWidth,int24 maxWidth,int24 maxTickMovePerRebalance,uint16 maxSlippageBps,bool allowOutOfRangePosition)`
 - `RebalancePlan` 编码为 `(bytes32 poolId,int24 newTickLower,int24 newTickUpper,uint128 liquidityToRemove,uint128 liquidityToAdd,uint256 amount0Min,uint256 amount1Min,uint256 amount0Max,uint256 amount1Max,uint256 deadline,uint256 nonce,bytes32 reasonHash)`
 - `WithdrawPlan` 编码为 `(bytes32 poolId,uint256 amount0Min,uint256 amount1Min,uint256 deadline)`
 
@@ -127,20 +127,20 @@ cast calldata "approve(address,uint256)" \
 
 ```bash
 cast calldata \
-  "createVaultAndAddPool(address,address,(address,address,uint24,int24,address),(int24,int24,int24,uint16,uint32,bool))" \
+  "createVaultAndAddPool(address,address,(address,address,uint24,int24,address),(int24,int24,int24,uint16,bool))" \
   <owner> \
   <aiOperator> \
   "(<token0>,<token1>,<fee>,<tickSpacing>,<hook>)" \
-  "(<minWidth>,<maxWidth>,<maxTickMovePerRebalance>,<maxSlippageBps>,<minRebalanceInterval>,<allowOutOfRangePosition>)"
+  "(<minWidth>,<maxWidth>,<maxTickMovePerRebalance>,<maxSlippageBps>,<allowOutOfRangePosition>)"
 ```
 
 ### addPoolToVault
 
 ```bash
 cast calldata \
-  "addPoolToVault((address,address,uint24,int24,address),(int24,int24,int24,uint16,uint32,bool))" \
+  "addPoolToVault((address,address,uint24,int24,address),(int24,int24,int24,uint16,bool))" \
   "(<token0>,<token1>,<fee>,<tickSpacing>,<hook>)" \
-  "(<minWidth>,<maxWidth>,<maxTickMovePerRebalance>,<maxSlippageBps>,<minRebalanceInterval>,<allowOutOfRangePosition>)"
+  "(<minWidth>,<maxWidth>,<maxTickMovePerRebalance>,<maxSlippageBps>,<allowOutOfRangePosition>)"
 ```
 
 ### deposit
@@ -184,9 +184,9 @@ cast calldata "emergencyExit(bytes32)" <poolId>
 
 ```bash
 cast calldata \
-  "updateStrategyConfig(bytes32,(int24,int24,int24,uint16,uint32,bool))" \
+  "updateStrategyConfig(bytes32,(int24,int24,int24,uint16,bool))" \
   <poolId> \
-  "(<minWidth>,<maxWidth>,<maxTickMovePerRebalance>,<maxSlippageBps>,<minRebalanceInterval>,<allowOutOfRangePosition>)"
+  "(<minWidth>,<maxWidth>,<maxTickMovePerRebalance>,<maxSlippageBps>,<allowOutOfRangePosition>)"
 ```
 
 ### updateAIOperator / revoke

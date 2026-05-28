@@ -567,7 +567,7 @@ dt {
 
 table {
   border-collapse: collapse;
-  min-width: 940px;
+  min-width: 1240px;
   width: 100%;
 }
 
@@ -603,6 +603,68 @@ tbody tr:last-child td {
   align-items: flex-start;
   flex-direction: column;
   gap: 3px;
+}
+
+.deposit-cell {
+  min-width: 280px;
+}
+
+.deposit-form {
+  display: grid;
+  gap: 8px;
+  min-width: 260px;
+}
+
+.deposit-inputs {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.deposit-inputs label {
+  color: var(--text-soft);
+  display: grid;
+  font-size: 0.75rem;
+  font-weight: 600;
+  gap: 4px;
+}
+
+.deposit-inputs input {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  min-height: 36px;
+  min-width: 0;
+  outline: none;
+  padding: 0 9px;
+  width: 100%;
+}
+
+.deposit-inputs input:focus {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+.deposit-inputs input[aria-invalid='true'] {
+  border-color: var(--red-text);
+}
+
+.deposit-meta {
+  color: var(--text-soft);
+  display: grid;
+  font-size: 0.75rem;
+  gap: 2px;
+}
+
+.deposit-submit {
+  min-height: 36px;
+  width: 100%;
+}
+
+.deposit-status {
+  overflow-wrap: anywhere;
 }
 
 .pair-label {
@@ -708,6 +770,10 @@ tbody tr:last-child td {
 
   .vault-pool-item > div:last-child {
     text-align: left;
+  }
+
+  .deposit-inputs {
+    grid-template-columns: 1fr;
   }
 
   .panel {

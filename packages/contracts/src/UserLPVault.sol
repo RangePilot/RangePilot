@@ -98,7 +98,6 @@ contract UserLPVault is Initializable, ReentrancyGuard, IUnlockCallback, IRangeP
     error InvalidPlan();
     error DeadlineExpired();
     error NonceAlreadyUsed();
-    error CooldownActive();
     error PoolAlreadyEnabled(PoolId poolId);
     error PoolNotEnabled(PoolId poolId);
     error InvalidTickRange();
@@ -220,10 +219,10 @@ contract UserLPVault is Initializable, ReentrancyGuard, IUnlockCallback, IRangeP
         PoolAccount storage account = _pool(plan.poolId);
         _validateRebalancePlan(account, plan);
         usedNonces[plan.poolId][plan.nonce] = true;
-        account.lastRebalanceTimestamp = block.timestamp;
 
         bytes memory result = poolManager.unlock(abi.encode(_rebalanceCallback(plan)));
         (amount0Delta, amount1Delta) = abi.decode(result, (int256, int256));
+        account.lastRebalanceTimestamp = block.timestamp;
 
         emit Rebalanced(
             plan.poolId,
@@ -454,10 +453,6 @@ contract UserLPVault is Initializable, ReentrancyGuard, IUnlockCallback, IRangeP
     function _validateRebalancePlan(PoolAccount storage account, RebalancePlan calldata plan) internal view {
         if (block.timestamp > plan.deadline) revert DeadlineExpired();
         if (usedNonces[plan.poolId][plan.nonce]) revert NonceAlreadyUsed();
-        if (
-            account.lastRebalanceTimestamp != 0
-                && block.timestamp < account.lastRebalanceTimestamp + account.strategyConfig.minRebalanceInterval
-        ) revert CooldownActive();
         if (plan.liquidityToRemove > account.activePosition.liquidity) revert InsufficientLiquidity();
         if (account.activePosition.liquidity > 0 && plan.liquidityToRemove != account.activePosition.liquidity) {
             revert InvalidPlan();

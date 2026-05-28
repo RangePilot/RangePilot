@@ -30,7 +30,7 @@ contract UserLPVaultMultiPoolTest is RangePilotTestBase {
         assertEq(balanceFor(poolA).idle1, 1_000_000 ether);
     }
 
-    function test_NonceAndCooldownAreScopedPerPool() public {
+    function test_NonceIsScopedPerPool() public {
         fundVaultPool(poolB, 1_000_000 ether, 1_000_000 ether);
 
         vm.prank(operator);

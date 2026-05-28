@@ -22,21 +22,11 @@ contract UserLPVaultStrategyTest is RangePilotTestBase {
 
     function test_ReusedNonceReverts() public {
         addInitialLiquidity();
-        vm.warp(block.timestamp + 1 hours);
 
         RebalancePlan memory reused = plan(-120, 120, active().liquidity, 1 ether, 1);
         vm.expectRevert(UserLPVault.NonceAlreadyUsed.selector);
         vm.prank(operator);
         vault.rebalance(reused);
-    }
-
-    function test_CooldownReverts() public {
-        addInitialLiquidity();
-        uint128 liquidity = active().liquidity;
-
-        vm.expectRevert(UserLPVault.CooldownActive.selector);
-        vm.prank(operator);
-        vault.rebalance(plan(-120, 120, liquidity, 1 ether, 2));
     }
 
     function test_RangeTooNarrowReverts() public {
@@ -53,7 +43,6 @@ contract UserLPVaultStrategyTest is RangePilotTestBase {
 
     function test_TickMoveTooLargeReverts() public {
         addInitialLiquidity();
-        vm.warp(block.timestamp + 1 hours);
         uint128 liquidity = active().liquidity;
 
         vm.expectRevert(UserLPVault.TickMoveTooLarge.selector);
@@ -63,7 +52,6 @@ contract UserLPVaultStrategyTest is RangePilotTestBase {
 
     function test_ValidRebalanceUpdatesActivePosition() public {
         addInitialLiquidity();
-        vm.warp(block.timestamp + 1 hours);
         uint128 liquidity = active().liquidity;
 
         vm.prank(operator);

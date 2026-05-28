@@ -25,7 +25,6 @@ export type StrategyConfigData = {
   maxWidth: number
   maxTickMovePerRebalance: number
   maxSlippageBps: number
-  minRebalanceInterval: number
   allowOutOfRangePosition: boolean
 }
 
@@ -380,15 +379,13 @@ function parseStrategyConfig(value: unknown): StrategyConfigData | undefined {
   const maxWidth = toNumber(readField(value, 1, 'maxWidth'))
   const maxTickMovePerRebalance = toNumber(readField(value, 2, 'maxTickMovePerRebalance'))
   const maxSlippageBps = toNumber(readField(value, 3, 'maxSlippageBps'))
-  const minRebalanceInterval = toNumber(readField(value, 4, 'minRebalanceInterval'))
-  const allowOutOfRangePosition = toBoolean(readField(value, 5, 'allowOutOfRangePosition'))
+  const allowOutOfRangePosition = toBoolean(readField(value, 4, 'allowOutOfRangePosition'))
 
   if (
     minWidth === undefined ||
     maxWidth === undefined ||
     maxTickMovePerRebalance === undefined ||
     maxSlippageBps === undefined ||
-    minRebalanceInterval === undefined ||
     allowOutOfRangePosition === undefined
   ) {
     return undefined
@@ -399,7 +396,6 @@ function parseStrategyConfig(value: unknown): StrategyConfigData | undefined {
     maxWidth,
     maxTickMovePerRebalance,
     maxSlippageBps,
-    minRebalanceInterval,
     allowOutOfRangePosition,
   }
 }

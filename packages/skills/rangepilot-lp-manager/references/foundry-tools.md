@@ -32,7 +32,7 @@ cast sig "rebalance((bytes32,int24,int24,uint128,uint128,uint256,uint256,uint256
 cast sig "deposit(bytes32,uint256,uint256)"
 cast sig "withdraw((bytes32,uint256,uint256,uint256))"
 cast sig "collectFees(bytes32)"
-cast sig "addPoolToVault((address,address,uint24,int24,address),(int24,int24,int24,uint16,uint32,bool))"
+cast sig "addPoolToVault((address,address,uint24,int24,address),(int24,int24,int24,uint16,bool))"
 ```
 
 已知 selector：
@@ -42,7 +42,7 @@ deposit(bytes32,uint256,uint256): 0x278f2ab8
 rebalance((bytes32,int24,int24,uint128,uint128,uint256,uint256,uint256,uint256,uint256,uint256,bytes32)): 0xe9735495
 collectFees(bytes32): 0x817db73b
 withdraw((bytes32,uint256,uint256,uint256)): 0x07e0839f
-addPoolToVault((address,address,uint24,int24,address),(int24,int24,int24,uint16,uint32,bool)): 0xaebbd90a
+addPoolToVault((address,address,uint24,int24,address),(int24,int24,int24,uint16,bool)): 0xeff3be22
 ```
 
 ## calldata 编码
@@ -73,7 +73,7 @@ cast call <vault> "aiOperator()(address)" --rpc-url <rpc>
 cast call <vault> "poolCount()(uint256)" --rpc-url <rpc>
 cast call <vault> "poolIdAt(uint256)(bytes32)" <index> --rpc-url <rpc>
 cast call <vault> "getPoolKey(bytes32)((address,address,uint24,int24,address))" <poolId> --rpc-url <rpc>
-cast call <vault> "getStrategyConfig(bytes32)((int24,int24,int24,uint16,uint32,bool))" <poolId> --rpc-url <rpc>
+cast call <vault> "getStrategyConfig(bytes32)((int24,int24,int24,uint16,bool))" <poolId> --rpc-url <rpc>
 cast call <vault> "getActivePosition(bytes32)((int24,int24,uint128,bytes32))" <poolId> --rpc-url <rpc>
 cast call <vault> "getPoolBalance(bytes32)((uint256,uint256))" <poolId> --rpc-url <rpc>
 cast call <vault> "usedNonces(bytes32,uint256)(bool)" <poolId> <nonce> --rpc-url <rpc>
@@ -130,4 +130,4 @@ cast 4byte-decode <selector-or-revert-data>
 - 先查询 `owner()` / `aiOperator()` 判断权限。
 - 查询 `isPoolEnabled(poolId)` 与 Hook 注册状态。
 - 查询 `usedNonces(poolId, nonce)` 和 `lastRebalanceTimestamp(poolId)`。
-- 查询 `getStrategyConfig(poolId)` 验证 tick width、tick move 和 cooldown。
+- 查询 `getStrategyConfig(poolId)` 验证 tick width、tick move 和 slippage。

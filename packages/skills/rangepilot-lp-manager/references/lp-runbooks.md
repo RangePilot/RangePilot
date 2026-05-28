@@ -97,7 +97,7 @@ cast call <vault> "poolCount()(uint256)" --rpc-url <rpc>
 cast call <vault> "poolIdAt(uint256)(bytes32)" <index> --rpc-url <rpc>
 cast call <vault> "isPoolEnabled(bytes32)(bool)" <poolId> --rpc-url <rpc>
 cast call <vault> "getPoolKey(bytes32)((address,address,uint24,int24,address))" <poolId> --rpc-url <rpc>
-cast call <vault> "getStrategyConfig(bytes32)((int24,int24,int24,uint16,uint32,bool))" <poolId> --rpc-url <rpc>
+cast call <vault> "getStrategyConfig(bytes32)((int24,int24,int24,uint16,bool))" <poolId> --rpc-url <rpc>
 cast call <vault> "getActivePosition(bytes32)((int24,int24,uint128,bytes32))" <poolId> --rpc-url <rpc>
 cast call <vault> "getPoolBalance(bytes32)((uint256,uint256))" <poolId> --rpc-url <rpc>
 cast call <vault> "lastRebalanceTimestamp(bytes32)(uint256)" <poolId> --rpc-url <rpc>

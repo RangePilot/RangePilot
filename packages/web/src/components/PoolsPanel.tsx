@@ -5,16 +5,38 @@ import { explorerAddress } from '../utils/explorer'
 import {
   formatAddress,
   formatBps,
-  formatDuration,
   formatInteger,
   formatPercentFromFeeUnits,
   formatPoolId,
   formatTimestamp,
   formatTokenAmount,
 } from '../utils/format'
+import { PoolDepositForm } from './PoolDepositForm'
 import { StatusBadge, type StatusKind } from './StatusBadge'
 
-export function PoolsPanel({ pools, isLoading, chainId }: { pools: PoolPortfolio[]; isLoading: boolean; chainId: number }) {
+type PoolsPanelProps = {
+  pools: PoolPortfolio[]
+  isLoading: boolean
+  chainId: number
+  owner?: Address
+  vaultAddress?: Address
+  isWalletOnSelectedChain: boolean
+  isSwitchPending: boolean
+  onSwitchChain: () => void
+  onDeposit: () => void | Promise<unknown>
+}
+
+export function PoolsPanel({
+  pools,
+  isLoading,
+  chainId,
+  owner,
+  vaultAddress,
+  isWalletOnSelectedChain,
+  isSwitchPending,
+  onSwitchChain,
+  onDeposit,
+}: PoolsPanelProps) {
   if (isLoading) {
     return (
       <section className="panel pools-panel">
@@ -59,11 +81,22 @@ export function PoolsPanel({ pools, isLoading, chainId }: { pools: PoolPortfolio
                 <th>Idle Balance</th>
                 <th>Risk Limits</th>
                 <th>Hook</th>
+                <th>Deposit</th>
               </tr>
             </thead>
             <tbody>
               {pools.map((pool) => (
-                <PoolRow key={pool.poolId} pool={pool} chainId={chainId} />
+                <PoolRow
+                  key={pool.poolId}
+                  pool={pool}
+                  chainId={chainId}
+                  owner={owner}
+                  vaultAddress={vaultAddress}
+                  isWalletOnSelectedChain={isWalletOnSelectedChain}
+                  isSwitchPending={isSwitchPending}
+                  onSwitchChain={onSwitchChain}
+                  onDeposit={onDeposit}
+                />
               ))}
             </tbody>
           </table>
@@ -73,7 +106,25 @@ export function PoolsPanel({ pools, isLoading, chainId }: { pools: PoolPortfolio
   )
 }
 
-function PoolRow({ pool, chainId }: { pool: PoolPortfolio; chainId: number }) {
+function PoolRow({
+  pool,
+  chainId,
+  owner,
+  vaultAddress,
+  isWalletOnSelectedChain,
+  isSwitchPending,
+  onSwitchChain,
+  onDeposit,
+}: {
+  pool: PoolPortfolio
+  chainId: number
+  owner?: Address
+  vaultAddress?: Address
+  isWalletOnSelectedChain: boolean
+  isSwitchPending: boolean
+  onSwitchChain: () => void
+  onDeposit: () => void | Promise<unknown>
+}) {
   const rangeState = getRangeState(pool)
   const token0 = tokenLabel(pool, 'token0')
   const token1 = tokenLabel(pool, 'token1')
@@ -117,12 +168,23 @@ function PoolRow({ pool, chainId }: { pool: PoolPortfolio; chainId: number }) {
         <span>
           move {pool.strategy?.maxTickMovePerRebalance ?? '-'} · slip {formatBps(pool.strategy?.maxSlippageBps)}
         </span>
-        <span>cooldown {formatDuration(pool.strategy?.minRebalanceInterval)}</span>
       </td>
       <td>
         <StatusBadge state={pool.registered ? 'good' : 'warn'} label={pool.registered ? 'Registered' : 'Unchecked'} />
         <span className="muted">swaps {formatInteger(pool.swapCount)}</span>
         <span className="muted">rebalance {formatTimestamp(pool.lastRebalanceTimestamp)}</span>
+      </td>
+      <td className="deposit-cell">
+        <PoolDepositForm
+          pool={pool}
+          owner={owner}
+          vaultAddress={vaultAddress}
+          chainId={chainId}
+          isWalletOnSelectedChain={isWalletOnSelectedChain}
+          isSwitchPending={isSwitchPending}
+          onSwitchChain={onSwitchChain}
+          onDeposit={onDeposit}
+        />
       </td>
     </tr>
   )

@@ -40,8 +40,7 @@ export function AppHeader({
           <TrendUp size={18} weight="bold" />
         </div>
         <div>
-          <p className="eyebrow">RangePilot</p>
-          <h1>LP Vault Console</h1>
+          <h1>RangePilot</h1>
         </div>
       </div>
 

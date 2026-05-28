@@ -88,10 +88,9 @@ ERC20 approve 规则：
 - `liquidityToAdd == 0 && liquidityToRemove == 0` 会 revert。
 - 添加流动性前必须确保该 pool 的 `idle0/idle1` 足够。
 
-### nonce 和 cooldown
+### nonce
 
 - `usedNonces(poolId, nonce) == false`
-- 当前时间 >= `lastRebalanceTimestamp(poolId) + minRebalanceInterval`
 - nonce 按 pool 独立，不同 pool 可以使用相同 nonce。
 
 ### deadline
@@ -129,7 +128,6 @@ ERC20 approve 规则：
 - `NotOperator`：sender 不是 aiOperator 或 owner。
 - `PoolNotEnabled`：pool 未添加到 Vault。
 - `InsufficientIdleBalance`：该 pool 子账户余额不足，不能挪用其他 pool。
-- `CooldownActive`：未过最小 rebalance 间隔。
 - `NonceAlreadyUsed`：该 pool 的 nonce 已使用。
 - `InvalidTickRange`：tick 或 width 不合规。
 - `TickMoveTooLarge`：超出 maxTickMovePerRebalance。

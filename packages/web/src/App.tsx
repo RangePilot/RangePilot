@@ -114,7 +114,17 @@ function App() {
             vault={vault}
           />
         )}
-        <PoolsPanel pools={vault?.pools ?? []} isLoading={portfolio.isLoading} chainId={selectedChainId} />
+        <PoolsPanel
+          pools={vault?.pools ?? []}
+          isLoading={portfolio.isLoading}
+          chainId={selectedChainId}
+          owner={address}
+          vaultAddress={vault?.vaultAddress}
+          isWalletOnSelectedChain={isWalletOnSelectedChain}
+          isSwitchPending={isSwitchPending}
+          onSwitchChain={handleSwitchChain}
+          onDeposit={() => portfolio.refetch()}
+        />
       </section>
     </main>
   )

@@ -20,7 +20,7 @@ metadata:
 - AI operator 只能执行 `rebalance` 和 `collectFees`。提款、紧急退出、修改策略、修改 operator 必须由 owner 明确要求并由 owner 钱包执行。
 - 不使用无限授权，不调用任意外部 calldata executor，不直接调用 `PoolManager.modifyLiquidity` 绕过 Vault。
 - `rebalance` 的 `deadline` 应很短，推荐 5 分钟以内。
-- 每个 pool 的资金、nonce、cooldown 独立。绝不能把 pool A 的 idle 余额用于 pool B。
+- 每个 pool 的资金、nonce 和 active position 独立。绝不能把 pool A 的 idle 余额用于 pool B。
 
 ## 参考文件索引
 

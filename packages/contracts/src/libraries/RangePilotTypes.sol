@@ -8,7 +8,6 @@ struct StrategyConfig {
     int24 maxWidth;
     int24 maxTickMovePerRebalance;
     uint16 maxSlippageBps;
-    uint32 minRebalanceInterval;
     bool allowOutOfRangePosition;
 }
 
