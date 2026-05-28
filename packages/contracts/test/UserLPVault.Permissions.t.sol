@@ -64,9 +64,19 @@ contract UserLPVaultPermissionsTest is RangePilotTestBase {
         assertEq(vault.getStrategyConfig(key.toId()).maxWidth, 1200);
     }
 
-    function test_AIOperatorCannotUpdateStrategyConfig() public {
-        vm.expectRevert(UserLPVault.NotOwner.selector);
+    function test_AIOperatorCanUpdateStrategyConfig() public {
+        StrategyConfig memory config = defaultConfig();
+        config.maxWidth = 1200;
+
         vm.prank(operator);
+        vault.updateStrategyConfig(key.toId(), config);
+
+        assertEq(vault.getStrategyConfig(key.toId()).maxWidth, 1200);
+    }
+
+    function test_NonOperatorCannotUpdateStrategyConfig() public {
+        vm.expectRevert(UserLPVault.NotOperator.selector);
+        vm.prank(other);
         vault.updateStrategyConfig(key.toId(), defaultConfig());
     }
 

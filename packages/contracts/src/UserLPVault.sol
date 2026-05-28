@@ -280,7 +280,7 @@ contract UserLPVault is Initializable, ReentrancyGuard, IUnlockCallback, IRangeP
         emit EmergencyExited(id, owner, amount0, amount1);
     }
 
-    function updateStrategyConfig(PoolId id, StrategyConfig calldata newConfig) external onlyOwner {
+    function updateStrategyConfig(PoolId id, StrategyConfig calldata newConfig) external onlyOperatorOrOwner {
         PoolAccount storage account = _pool(id);
         _validateConfig(newConfig);
         account.strategyConfig = newConfig;

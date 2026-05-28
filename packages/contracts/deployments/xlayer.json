@@ -7,13 +7,13 @@
     "stateView": "0x76fd297e2d437cd7f76d50f01afe6160f86e9990"
   },
   "rangePilot": {
-    "hookCreate2Deployer": "0xD99E2553B4e3631CF5C0DE06FD6ece5B03367cD3",
-    "managedLPHook": "0x1eB079De567d3BAb0399d377B3c32f7197058a40",
+    "hookCreate2Deployer": "0xF3d973b076B169E65202A0a0c5376A309f8A9B69",
+    "managedLPHook": "0x29779a886523edEE78187f051635F7A969DC8a40",
     "owner": "0x2eaE1C6Ff3e9e484eC31F24D0B9E1AAeC7ff0a32",
     "poolManager": "0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32",
     "stateView": "0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990",
-    "userLPVaultImplementation": "0x2387735398358cB0B4c9288CF2dd784e02d76921",
-    "vaultFactory": "0x1185C4f3304ED421142208a86fdB0eEbfDf91AAb"
+    "userLPVaultImplementation": "0x8Aa7b9869Bf6E3566070395bFaE367Ad914BA9e4",
+    "vaultFactory": "0xE8c006b5d4A8a2b0CC886c947a8Fd5F1E0eB921A"
   },
   "tokens": {
     "rangePilot": "0x799C5d3B2725FE35Ba19b3dbA90777DC2B7d43C4"
