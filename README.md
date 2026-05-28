@@ -6,8 +6,6 @@
   <sub>Built with OKX OnchainOS, RangePilot Vaults, and ManagedLPHook</sub>
   <br />
   <br />
-  <a href="https://www.rangepilot.xyz">Web App</a>
-  ·
   <a href="./README_zh.md">中文</a>
 </p>
 
