@@ -1,183 +1,401 @@
 # LP Runbooks
 
-## 目录
+## Contents
 
-- 通用执行框架
-- 创建 Vault 并添加第一个 pool
-- 给已有 Vault 添加 pool
-- approve 和 deposit
-- 读取 Vault 状态
-- 生成并执行 rebalance
+- General execution framework
+- Create a Uniswap v4 pool with RangePilot Hook
+- Create a Vault
+- Bind a pool to a Vault
+- approve and deposit
+- First LP add / rebalance
+- liquidityToAdd calculation
+- Move an existing LP range
 - collect fees
-- withdraw
-- revoke AI operator
+- updateStrategyConfig
+- withdraw / emergencyExit
+- Swap availability checks
+- State checklist
 
-## 通用执行框架
+## General Execution Framework
 
-任何写操作都遵循：
+Use the same flow for all write operations:
 
-1. 确认用户意图、chain、sender、合约地址。
-2. 用 cast 或区块浏览器做 read-only 校验。
-3. 编码 calldata。
-4. 运行 `onchainos security tx-scan`。
-5. 如果安全扫描允许，运行 `onchainos wallet contract-call`，首次不带 `--force`。
-6. 如果返回 confirming，展示消息并等待用户确认。
-7. 交易完成后读取状态验证。
+1. Clarify the user's goal, chain, sender, and target contract.
+2. Confirm addresses from deployment docs or user input.
+3. Read prerequisite state with `cast call`.
+4. Encode the transaction with `cast calldata`.
+5. Simulate critical write operations with `cast call`.
+6. Run `onchainos security tx-scan`.
+7. Send with `onchainos wallet contract-call`; do not use `--force` on the first attempt.
+8. If the CLI returns a confirming response, show the message and wait for explicit user confirmation.
+9. After the transaction, read state again and verify the result.
 
-## 创建 Vault 并添加第一个 pool
+## Create A Uniswap v4 Pool With RangePilot Hook
 
-适用：用户首次使用 RangePilot。
+Use this when the user wants to create a new v4 pool with RangePilot `ManagedLPHook`.
 
-收集：
+Collect:
 
-- `owner`
-- `aiOperator`
-- `vaultFactory`
-- `managedLPHook`
+- chain
 - tokenA/tokenB
 - fee
 - tickSpacing
-- StrategyConfig
+- `sqrtPriceX96`
+- PoolManager
+- ManagedLPHook
+- sender
 
-步骤：
+Steps:
 
-1. 排序 token 得到 `token0/token1`。
-2. 读取 `factory.userVaults(owner)`。如果已有 Vault，不要重复创建，改走“给已有 Vault 添加 pool”。
-3. 构造 PoolKey：`(token0, token1, fee, tickSpacing, hook)`。
-4. 编码 `createVaultAndAddPool` calldata。
-5. 扫描并调用 Factory。
-6. 完成后读取：
+1. Query token decimals and convert the human-readable initial price to raw token units.
+2. Sort addresses:
+   ```text
+   currency0 = min(tokenA, tokenB)
+   currency1 = max(tokenA, tokenB)
+   ```
+3. Build PoolKey:
+   ```text
+   (currency0, currency1, fee, tickSpacing, managedLPHook)
+   ```
+4. Calculate or confirm `sqrtPriceX96`:
+   ```text
+   rawPrice = amount1Raw / amount0Raw
+   sqrtPriceX96 = sqrt(rawPrice) * 2^96
+   ```
+5. Encode:
+   ```bash
+   cast calldata \
+     "initialize((address,address,uint24,int24,address),uint160)" \
+     "(<currency0>,<currency1>,<fee>,<tickSpacing>,<hook>)" \
+     <sqrtPriceX96>
+   ```
+6. Scan and call PoolManager.
+7. After success, read poolId from the `Initialize` event or calculate poolId with `foundry-tools.md`.
+8. Check with StateView:
+   ```bash
+   cast call <stateView> "getSlot0(bytes32)(uint160,int24,uint24,uint24)" <poolId> --rpc-url <rpc>
+   ```
+
+Notes:
+
+- Pool creation only initializes price; it does not grant Vault permissions.
+- Pool creation does not add liquidity.
+- If the PoolKey is already initialized, initialize will fail; move directly to Vault binding.
+
+## Create A Vault
+
+Use this when the user does not yet have a Vault.
+
+Collect:
+
+- owner
+- aiOperator
+- VaultFactory
+- sender must be owner
+
+Steps:
+
+1. Check whether a Vault already exists:
    ```bash
    cast call <factory> "userVaults(address)(address)" <owner> --rpc-url <rpc>
-   cast call <vault> "poolCount()(uint256)" --rpc-url <rpc>
-   cast call <vault> "poolIdAt(uint256)(bytes32)" 0 --rpc-url <rpc>
    ```
-7. 校验 `isPoolEnabled(poolId)` 和 `hook.registeredVaultForPool(poolId, vault)`。
-
-## 给已有 Vault 添加 pool
-
-适用：owner 已经有 Vault，需要管理另一个资金池。
-
-步骤：
-
-1. 读取 `factory.userVaults(owner)`，确认非零。
-2. 排序 token，构造 PoolKey。
-3. 检查 PoolKey 使用的 hook 等于 `ManagedLPHook`。
-4. 编码 `addPoolToVault(key, config)`。
-5. 用 owner 钱包扫描并调用 Factory。
-6. 交易后读取最新 `poolCount` 和 `poolIdAt(poolCount - 1)`。
-7. 校验 `isPoolEnabled(poolId)` 与 Hook 注册状态。
-
-## approve 和 deposit
-
-适用：owner 将 token0/token1 存入某个 pool 子账户。
-
-步骤：
-
-1. 读取 Vault 的 PoolKey，确认 token0/token1。
-2. 查询 owner 余额和 allowance：
+2. If a Vault already exists, stop creation and use the existing Vault.
+3. Encode:
    ```bash
-   cast call <token0> "balanceOf(address)(uint256)" <owner> --rpc-url <rpc>
-   cast call <token0> "allowance(address,address)(uint256)" <owner> <vault> --rpc-url <rpc>
+   cast calldata "createVault(address,address)" <owner> <aiOperator>
    ```
-3. 如果 allowance 不足，编码 ERC20 `approve(vault, amount)`。不要使用无限授权。
-4. 对 token0/token1 分别扫描并调用 approve。
-5. 编码 `deposit(poolId, amount0, amount1)`。
-6. 用 owner 钱包扫描并调用 Vault。
-7. 交易后读取 `getPoolBalance(poolId)`，确认 idle0/idle1 增加。
+4. Scan and call Factory.
+5. After success, read:
+   ```bash
+   cast call <factory> "userVaults(address)(address)" <owner> --rpc-url <rpc>
+   cast call <vault> "owner()(address)" --rpc-url <rpc>
+   cast call <vault> "aiOperator()(address)" --rpc-url <rpc>
+   ```
 
-## 读取 Vault 状态
+## Bind A Pool To A Vault
 
-推荐读取项：
+Use this when a pool already exists, or PoolKey is known, and the Vault needs permission to manage LP.
+
+Collect:
+
+- owner
+- vault
+- aiOperator
+- Factory
+- Hook
+- PoolKey
+- StrategyConfig
+- sender: owner or aiOperator
+
+Steps:
+
+1. Get the Vault:
+   ```bash
+   cast call <factory> "userVaults(address)(address)" <owner> --rpc-url <rpc>
+   ```
+2. Validate the Vault:
+   ```bash
+   cast call <factory> "isVault(address)(bool)" <vault> --rpc-url <rpc>
+   cast call <vault> "aiOperator()(address)" --rpc-url <rpc>
+   cast call <vault> "factory()(address)" --rpc-url <rpc>
+   cast call <vault> "hook()(address)" --rpc-url <rpc>
+   ```
+3. Calculate poolId.
+4. If `isPoolEnabled(poolId) == true`, do not bind again.
+5. If sender is owner, encode:
+   ```bash
+   cast calldata \
+     "addPoolToVault((address,address,uint24,int24,address),(int24,int24,int24,uint16,bool))" \
+     "(<currency0>,<currency1>,<fee>,<tickSpacing>,<hook>)" \
+     "(<minWidth>,<maxWidth>,<maxTickMovePerRebalance>,<maxSlippageBps>,<allowOutOfRangePosition>)"
+   ```
+6. If sender is aiOperator, encode:
+   ```bash
+   cast calldata \
+     "addPoolToVaultFor(address,(address,address,uint24,int24,address),(int24,int24,int24,uint16,bool))" \
+     <owner> \
+     "(<currency0>,<currency1>,<fee>,<tickSpacing>,<hook>)" \
+     "(<minWidth>,<maxWidth>,<maxTickMovePerRebalance>,<maxSlippageBps>,<allowOutOfRangePosition>)"
+   ```
+7. Scan and call Factory.
+8. After success, confirm:
+   ```bash
+   cast call <vault> "isPoolEnabled(bytes32)(bool)" <poolId> --rpc-url <rpc>
+   cast call <hook> "registeredVaultForPool(bytes32,address)(bool)" <poolId> <vault> --rpc-url <rpc>
+   ```
+
+## approve And deposit
+
+Use this when the owner deposits tokens into one pool subaccount in the Vault.
+
+Steps:
+
+1. Read PoolKey and confirm currency0/currency1.
+2. Convert user-entered amounts to raw amounts.
+3. For token0 and token1, query balance and allowance:
+   ```bash
+   cast call <token> "balanceOf(address)(uint256)" <owner> --rpc-url <rpc>
+   cast call <token> "allowance(address,address)(uint256)" <owner> <vault> --rpc-url <rpc>
+   ```
+4. If allowance is insufficient, owner approves the Vault:
+   ```bash
+   cast calldata "approve(address,uint256)" <vault> <amount>
+   ```
+5. After approval confirmation, call deposit:
+   ```bash
+   cast calldata "deposit(bytes32,uint256,uint256)" <poolId> <amount0> <amount1>
+   ```
+6. After success, read:
+   ```bash
+   cast call <vault> "getPoolBalance(bytes32)((uint256,uint256))" <poolId> --rpc-url <rpc>
+   ```
+
+Notes:
+
+- deposit only increases idle balance; it does not automatically add LP.
+- `amount0/amount1` order must match PoolKey, not the user's spoken token order.
+
+## First LP Add / Rebalance
+
+Use this when the Vault has deposited funds, the pool is bound, and active liquidity is 0.
+
+Pre-reads:
 
 ```bash
-cast call <vault> "owner()(address)" --rpc-url <rpc>
-cast call <vault> "aiOperator()(address)" --rpc-url <rpc>
-cast call <vault> "poolCount()(uint256)" --rpc-url <rpc>
-cast call <vault> "poolIdAt(uint256)(bytes32)" <index> --rpc-url <rpc>
-cast call <vault> "isPoolEnabled(bytes32)(bool)" <poolId> --rpc-url <rpc>
-cast call <vault> "getPoolKey(bytes32)((address,address,uint24,int24,address))" <poolId> --rpc-url <rpc>
-cast call <vault> "getStrategyConfig(bytes32)((int24,int24,int24,uint16,bool))" <poolId> --rpc-url <rpc>
-cast call <vault> "getActivePosition(bytes32)((int24,int24,uint128,bytes32))" <poolId> --rpc-url <rpc>
 cast call <vault> "getPoolBalance(bytes32)((uint256,uint256))" <poolId> --rpc-url <rpc>
-cast call <vault> "lastRebalanceTimestamp(bytes32)(uint256)" <poolId> --rpc-url <rpc>
-```
-
-如果有 StateView：
-
-```bash
+cast call <vault> "getActivePosition(bytes32)((int24,int24,uint128,bytes32))" <poolId> --rpc-url <rpc>
+cast call <vault> "getStrategyConfig(bytes32)((int24,int24,int24,uint16,bool))" <poolId> --rpc-url <rpc>
 cast call <stateView> "getSlot0(bytes32)(uint160,int24,uint24,uint24)" <poolId> --rpc-url <rpc>
 ```
 
-## 生成并执行 rebalance
+Plan generation:
 
-适用：AI operator 在用户策略边界内移动 LP range 或调整流动性。
+1. Choose a tick range that satisfies StrategyConfig.
+2. For the first active liquidity add, `maxTickMovePerRebalance` does not apply.
+3. Calculate `liquidityToAdd` from current price, range, idle0, and idle1.
+4. Set:
+   ```text
+   liquidityToRemove = 0
+   amount0Min = 0
+   amount1Min = 0
+   amount0Max = idle0 or a more conservative cap
+   amount1Max = idle1 or a more conservative cap
+   deadline = now + 300
+   nonce = unused random/time nonce
+   reasonHash = cast keccak "initial-rebalance:<vault>:<poolId>:<nonce>"
+   ```
+5. Encode `rebalance(plan)`.
+6. Simulate with `cast call` and confirm deltas are reasonable.
+7. Run security scan and call the Vault as owner or aiOperator.
+8. After success, read activePosition, poolBalance, and StateView liquidity.
 
-前置读取：
+Important:
 
-- `owner`
-- `aiOperator`
-- 当前 sender
-- `getStrategyConfig(poolId)`
-- `getActivePosition(poolId)`
-- `getPoolBalance(poolId)`
-- `lastRebalanceTimestamp(poolId)`
-- `usedNonces(poolId, nonce)`
-- StateView 当前 tick
-- Hook 注册状态
+- The agent cannot freely specify "how many tokens to use"; actual spending is determined by current price and tick range.
+- If the deposit ratio does not match current price and range, one side may remain idle.
+- To use both sides more closely, adjust the tick range or update StrategyConfig first.
 
-生成 RebalancePlan：
+## liquidityToAdd Calculation
 
-- `poolId`：目标 pool
-- `newTickLower/newTickUpper`：必须按 tickSpacing 对齐
-- `liquidityToRemove`：如果当前有 active liquidity，必须等于当前全部 liquidity；当前合约不支持部分移除
-- `liquidityToAdd`：新 range 添加的 liquidity；撤仓时可以为 0
-- `amount0Min/amount1Min`：移除流动性时最少收到
-- `amount0Max/amount1Max`：添加流动性时最多花费
-- `deadline`：推荐当前时间 + 300 秒
-- `nonce`：未使用的新 nonce
-- `reasonHash`：策略理由哈希，例如 `cast keccak "rebalance:<vault>:<poolId>:<nonce>:<reason>"`
+When building `RebalancePlan`, `liquidityToAdd` must match current price, range, and Vault idle balances. Prefer a reliable Uniswap v4/v3 liquidity math library. If no library is available, calculate conservatively with the formulas below and confirm spending with `cast call`.
 
-执行：
+Symbols:
 
-1. 根据 `contract-interfaces.md` 编码 `rebalance`.
-2. 运行 tx-scan。
-3. 用 aiOperator 或 owner 钱包调用 Vault。
-4. 交易后读取 activePosition 和 poolBalance。
+```text
+Q96 = 2^96
+S = current sqrtPriceX96
+A = sqrtPriceX96 at tickLower
+B = sqrtPriceX96 at tickUpper
+amount0 = available token0 raw amount
+amount1 = available token1 raw amount
+```
+
+Tick to sqrt price:
+
+```text
+sqrtPriceX96AtTick(tick) = sqrt(1.0001^tick) * 2^96
+```
+
+In production, integer rounding rules matter. If no on-chain/library helper is available, use high-precision decimal math, round conservatively, and make `cast call` simulation the final source of truth.
+
+When current price is in range, `A < S < B`:
+
+```text
+liquidity0 = floor(amount0 * S * B / ((B - S) * Q96))
+liquidity1 = floor(amount1 * Q96 / (S - A))
+liquidityToAdd = min(liquidity0, liquidity1)
+```
+
+Expected spending:
+
+```text
+spent0 = ceil(liquidityToAdd * (B - S) * Q96 / (S * B))
+spent1 = ceil(liquidityToAdd * (S - A) / Q96)
+```
+
+When price is out of range:
+
+- `S <= A`: the position uses only token0.
+- `S >= B`: the position uses only token1.
+- If `allowOutOfRangePosition == false`, the Vault rejects out-of-range positions.
+
+Conservative rules:
+
+- Round `liquidityToAdd` down.
+- To avoid max amount failures from rounding, reduce it by another 0.1%-1%.
+- `amount0Max/amount1Max` must not exceed that pool's idle balance.
+- After encoding, simulate with `cast call`, read returned deltas, and confirm actual spending does not exceed max.
+
+## Move An Existing LP Range
+
+Use this when an active position already exists and the range or liquidity should change.
+
+Steps:
+
+1. Read the old active position.
+2. `liquidityToRemove` must equal the full old `activePosition.liquidity`.
+3. The new range must satisfy:
+   - Width is within min/max.
+   - If out-of-range positions are not allowed, current tick is inside the new range.
+   - Movement of lower/upper relative to the old lower/upper does not exceed `maxTickMovePerRebalance`.
+4. Calculate `liquidityToAdd` from expected balances after removal plus existing idle.
+5. Set `amount0Min/amount1Min` to protect received amounts during removal.
+6. Set `amount0Max/amount1Max` to protect spending during add.
+7. Simulate, scan, and send.
 
 ## collect fees
 
-适用：只收取当前 active position 的 accrued fees，保留在对应 pool 子账户。
+Use this when owner or aiOperator collects fees from the current active position into Vault idle.
 
-步骤：
+Steps:
 
-1. 确认 sender 是 aiOperator 或 owner。
-2. 确认 activePosition.liquidity > 0。
-3. 编码 `collectFees(poolId)`。
-4. 扫描并调用 Vault。
-5. 读取 `getPoolBalance(poolId)` 验证 idle 增加。
+1. Confirm active liquidity > 0.
+2. Encode:
+   ```bash
+   cast calldata "collectFees(bytes32)" <poolId>
+   ```
+3. Scan and call the Vault.
+4. Read poolBalance and confirm idle balance increased.
 
-## withdraw
+## updateStrategyConfig
 
-适用：owner 提取某个 pool 子账户的全部 idle 余额，并在有 active position 时先移除该 pool 的全部流动性。
+Use this when owner or aiOperator adjusts strategy boundaries for a pool.
 
-步骤：
+Steps:
 
-1. 必须由 owner 明确要求。
-2. 编码 `withdraw((poolId, amount0Min, amount1Min, deadline))`。
-3. `deadline` 推荐 5 分钟以内。
-4. 扫描并用 owner 钱包调用 Vault。
-5. 交易后读取 activePosition 和 poolBalance，确认该 pool 清空。
+1. Read the old config.
+2. Explain the impact of the new parameters.
+3. Encode:
+   ```bash
+   cast calldata \
+     "updateStrategyConfig(bytes32,(int24,int24,int24,uint16,bool))" \
+     <poolId> \
+     "(<minWidth>,<maxWidth>,<maxTickMovePerRebalance>,<maxSlippageBps>,<allowOutOfRangePosition>)"
+   ```
+4. Scan and call the Vault.
+5. Read the new config.
 
-注意：`withdraw(pool A)` 不应影响 pool B。
+## withdraw / emergencyExit
 
-## revoke AI operator
+### withdraw
 
-适用：用户要撤销 AI 管理权限。
+Use this when the owner withdraws funds for a pool. If there is an active position, the Vault first removes that position, then sends that pool's idle funds to the owner.
 
-步骤：
+Encode:
 
-1. 必须由 owner 明确要求。
-2. 编码 `revokeAIOperator()`。
-3. 扫描并调用 Vault。
-4. 读取 `aiOperator()`，确认变为 `0x0000000000000000000000000000000000000000`。
+```bash
+cast calldata \
+  "withdraw((bytes32,uint256,uint256,uint256))" \
+  "(<poolId>,<amount0Min>,<amount1Min>,<deadline>)"
+```
+
+Only owner can call. After success, confirm active liquidity is 0 and poolBalance is cleared for that pool.
+
+### emergencyExit
+
+Use this only for emergency exits without min amount protection.
+
+```bash
+cast calldata "emergencyExit(bytes32)" <poolId>
+```
+
+The owner must explicitly request it. Prefer withdraw; use emergencyExit only in urgent scenarios.
+
+## Swap Availability Checks
+
+Read-only aggregator quote:
+
+```bash
+onchainos swap quote \
+  --from <tokenIn> \
+  --to <tokenOut> \
+  --readable-amount <amount> \
+  --chain xlayer
+```
+
+Interpretation:
+
+- Quote succeeds: continue evaluating price impact and execution.
+- `Input value is too low`: amount may be too small, token may lack a valid price, or the aggregator may not have indexed it.
+- `Insufficient liquidity`: the aggregator may not have found a route; check on-chain StateView.
+
+On-chain confirmation:
+
+```bash
+cast call <stateView> "getLiquidity(bytes32)(uint128)" <poolId> --rpc-url <rpc>
+cast call <hook> "swapCount(bytes32)(uint256)" <poolId> --rpc-url <rpc>
+```
+
+Direct v4 swap requires unlock callback and settlement logic. Without a dedicated helper, do not ask a normal wallet to call `PoolManager.swap` directly.
+
+## State Checklist
+
+After each operation, read at least the relevant items:
+
+```bash
+cast call <vault> "getPoolBalance(bytes32)((uint256,uint256))" <poolId> --rpc-url <rpc>
+cast call <vault> "getActivePosition(bytes32)((int24,int24,uint128,bytes32))" <poolId> --rpc-url <rpc>
+cast call <stateView> "getSlot0(bytes32)(uint160,int24,uint24,uint24)" <poolId> --rpc-url <rpc>
+cast call <stateView> "getLiquidity(bytes32)(uint128)" <poolId> --rpc-url <rpc>
+cast call <hook> "registeredVaultForPool(bytes32,address)(bool)" <poolId> <vault> --rpc-url <rpc>
+```

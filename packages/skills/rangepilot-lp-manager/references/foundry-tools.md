@@ -1,133 +1,204 @@
-# Cast Tools
+# Foundry / Cast Tools
 
-## 目录
+## Contents
 
-- 使用边界
-- selector
-- calldata 编码
-- read-only 查询
-- StateView 查询
-- 模拟和排错
+- Boundaries
+- Selector and calldata
+- poolId calculation
+- Read-only queries
+- StateView queries
+- `eth_call` simulation
+- Logs and transaction status
+- Common troubleshooting
 
-## 使用边界
+## Boundaries
 
-本文件只使用 Foundry 的 `cast` 命令，不要求存在 RangePilot 源码目录。
+This file requires only Foundry `cast`.
 
-cast 在本 skill 中主要用于：
+Recommended uses:
 
-- selector 查询
-- calldata 编码
-- read-only 链上查询
-- eth_call 模拟
-- 解码 revert 或日志
+- Encode calldata.
+- Compute selectors, poolIds, and reasonHash values.
+- Read on-chain state.
+- Simulate write functions with `eth_call`.
+- Decode revert selectors or transaction logs.
 
-写交易优先通过 OnchainOS。不要在没有用户明确授权的情况下使用 `cast send` 广播交易。
+Default write transactions should use OnchainOS. Do not broadcast with `cast send` unless the user explicitly asks for that execution path.
 
-## selector
+## Selector And Calldata
 
-查询 selector：
+Query selectors:
 
 ```bash
-cast sig "rebalance((bytes32,int24,int24,uint128,uint128,uint256,uint256,uint256,uint256,uint256,uint256,bytes32))"
+cast sig "initialize((address,address,uint24,int24,address),uint160)"
+cast sig "addPoolToVaultFor(address,(address,address,uint24,int24,address),(int24,int24,int24,uint16,bool))"
 cast sig "deposit(bytes32,uint256,uint256)"
-cast sig "withdraw((bytes32,uint256,uint256,uint256))"
-cast sig "collectFees(bytes32)"
-cast sig "addPoolToVault((address,address,uint24,int24,address),(int24,int24,int24,uint16,bool))"
+cast sig "rebalance((bytes32,int24,int24,uint128,uint128,uint256,uint256,uint256,uint256,uint256,uint256,bytes32))"
+cast sig "updateStrategyConfig(bytes32,(int24,int24,int24,uint16,bool))"
 ```
 
-已知 selector：
-
-```text
-deposit(bytes32,uint256,uint256): 0x278f2ab8
-rebalance((bytes32,int24,int24,uint128,uint128,uint256,uint256,uint256,uint256,uint256,uint256,bytes32)): 0xe9735495
-collectFees(bytes32): 0x817db73b
-withdraw((bytes32,uint256,uint256,uint256)): 0x07e0839f
-addPoolToVault((address,address,uint24,int24,address),(int24,int24,int24,uint16,bool)): 0xeff3be22
-```
-
-## calldata 编码
-
-用 `cast calldata` 编码，然后交给 OnchainOS：
+Encode calldata:
 
 ```bash
-CALLDATA=$(cast calldata "deposit(bytes32,uint256,uint256)" <poolId> <amount0> <amount1>)
+cast calldata "<signature>" <args...>
 ```
 
-如果 shell 不适合保存变量，直接复制输出到：
+reasonHash:
 
 ```bash
-onchainos security tx-scan --chain xlayer --from <sender> --to <vault> --data <calldata> --value 0x0
-onchainos wallet contract-call --to <vault> --chain xlayer --input-data <calldata> --amt 0 --biz-type defi --strategy rangepilot
+cast keccak "rangepilot:<action>:<vault>:<poolId>:<nonce>"
 ```
 
-## read-only 查询
+## poolId Calculation
 
-常用：
+`poolId = keccak256(abi.encode(currency0, currency1, fee, tickSpacing, hooks))`.
+
+With cast:
 
 ```bash
+ENCODED_KEY=$(cast abi-encode "f(address,address,uint24,int24,address)" \
+  <currency0> \
+  <currency1> \
+  <fee> \
+  <tickSpacing> \
+  <hook>)
+
+cast keccak $ENCODED_KEY
+```
+
+If shell variables are inconvenient, copy the output from `cast abi-encode` and pass it to `cast keccak`.
+
+More reliable sources:
+
+- Read `id` from the `PoolManager.Initialize` event.
+- After the pool is bound to a Vault, read `poolCount()` and `poolIdAt(index)`.
+
+## Read-Only Queries
+
+### Factory
+
+```bash
+cast call <factory> "poolManager()(address)" --rpc-url <rpc>
+cast call <factory> "hook()(address)" --rpc-url <rpc>
+cast call <factory> "vaultImplementation()(address)" --rpc-url <rpc>
 cast call <factory> "userVaults(address)(address)" <owner> --rpc-url <rpc>
 cast call <factory> "isVault(address)(bool)" <vault> --rpc-url <rpc>
+```
 
+### Vault
+
+```bash
 cast call <vault> "owner()(address)" --rpc-url <rpc>
 cast call <vault> "aiOperator()(address)" --rpc-url <rpc>
+cast call <vault> "factory()(address)" --rpc-url <rpc>
+cast call <vault> "hook()(address)" --rpc-url <rpc>
+cast call <vault> "poolManager()(address)" --rpc-url <rpc>
 cast call <vault> "poolCount()(uint256)" --rpc-url <rpc>
 cast call <vault> "poolIdAt(uint256)(bytes32)" <index> --rpc-url <rpc>
+cast call <vault> "isPoolEnabled(bytes32)(bool)" <poolId> --rpc-url <rpc>
 cast call <vault> "getPoolKey(bytes32)((address,address,uint24,int24,address))" <poolId> --rpc-url <rpc>
 cast call <vault> "getStrategyConfig(bytes32)((int24,int24,int24,uint16,bool))" <poolId> --rpc-url <rpc>
 cast call <vault> "getActivePosition(bytes32)((int24,int24,uint128,bytes32))" <poolId> --rpc-url <rpc>
 cast call <vault> "getPoolBalance(bytes32)((uint256,uint256))" <poolId> --rpc-url <rpc>
+cast call <vault> "lastRebalanceTimestamp(bytes32)(uint256)" <poolId> --rpc-url <rpc>
 cast call <vault> "usedNonces(bytes32,uint256)(bool)" <poolId> <nonce> --rpc-url <rpc>
-
-cast call <hook> "registeredVaultForPool(bytes32,address)(bool)" <poolId> <vault> --rpc-url <rpc>
 ```
 
-ERC20：
+### Hook
 
 ```bash
-cast call <token> "decimals()(uint8)" --rpc-url <rpc>
-cast call <token> "balanceOf(address)(uint256)" <owner> --rpc-url <rpc>
-cast call <token> "allowance(address,address)(uint256)" <owner> <vault> --rpc-url <rpc>
+cast call <hook> "factory()(address)" --rpc-url <rpc>
+cast call <hook> "poolManager()(address)" --rpc-url <rpc>
+cast call <hook> "registeredVaultForPool(bytes32,address)(bool)" <poolId> <vault> --rpc-url <rpc>
+cast call <hook> "swapCount(bytes32)(uint256)" <poolId> --rpc-url <rpc>
+cast call <hook> "lastSwapTimestamp(bytes32)(uint256)" <poolId> --rpc-url <rpc>
 ```
 
-## StateView 查询
+### ERC20
 
-如果部署地址文件或用户提供 StateView：
+```bash
+cast call <token> "symbol()(string)" --rpc-url <rpc>
+cast call <token> "decimals()(uint8)" --rpc-url <rpc>
+cast call <token> "balanceOf(address)(uint256)" <account> --rpc-url <rpc>
+cast call <token> "allowance(address,address)(uint256)" <owner> <spender> --rpc-url <rpc>
+```
+
+## StateView Queries
 
 ```bash
 cast call <stateView> "getSlot0(bytes32)(uint160,int24,uint24,uint24)" <poolId> --rpc-url <rpc>
 cast call <stateView> "getLiquidity(bytes32)(uint128)" <poolId> --rpc-url <rpc>
+cast call <stateView> "getTickLiquidity(bytes32,int24)(uint128,int128)" <poolId> <tick> --rpc-url <rpc>
 cast call <stateView> "getPositionInfo(bytes32,address,int24,int24,bytes32)(uint128,uint256,uint256)" \
   <poolId> <vault> <tickLower> <tickUpper> <salt> --rpc-url <rpc>
 ```
 
-`getSlot0` 返回：
+If a pool is not initialized, `getSlot0` or direct PoolManager state reads may revert. Prefer StateView.
 
-- `sqrtPriceX96`
-- `tick`
-- `protocolFee`
-- `lpFee`
+## `eth_call` Simulation
 
-## 模拟和排错
+Simulation does not change on-chain state. Simulate critical calls before sending write transactions.
 
-可以用 `cast call` 对非 view 函数做 eth_call 模拟，不会改链上状态。例如：
+### PoolManager.initialize
+
+```bash
+cast call <poolManager> \
+  "initialize((address,address,uint24,int24,address),uint160)(int24)" \
+  "(<currency0>,<currency1>,<fee>,<tickSpacing>,<hook>)" \
+  <sqrtPriceX96> \
+  --from <sender> \
+  --rpc-url <rpc>
+```
+
+### Vault.rebalance
 
 ```bash
 cast call <vault> \
   "rebalance((bytes32,int24,int24,uint128,uint128,uint256,uint256,uint256,uint256,uint256,uint256,bytes32))(int256,int256)" \
   "(<poolId>,<lower>,<upper>,<removeLiq>,<addLiq>,<amount0Min>,<amount1Min>,<amount0Max>,<amount1Max>,<deadline>,<nonce>,<reasonHash>)" \
-  --from <aiOperator> \
+  --from <ownerOrAiOperator> \
   --rpc-url <rpc>
 ```
 
-如果 revert：
+Returned `int256 amount0Delta/amount1Delta`:
+
+- Negative usually means the Vault spent that token.
+- Positive usually means the Vault received that token.
+
+## Logs And Transaction Status
+
+Get a receipt:
+
+```bash
+cast receipt <txHash> --rpc-url <rpc>
+```
+
+Useful events:
+
+- PoolManager `Initialize`: confirm poolId, tick, and sqrtPriceX96.
+- PoolManager `ModifyLiquidity`: confirm whether the Vault added or removed LP.
+- PoolManager `Swap`: confirm whether the pool has seen swaps.
+- Vault `PoolAdded`, `Deposited`, `Rebalanced`.
+- Factory `VaultCreated`, `PoolAddedToVault`.
+- Hook `VaultRegistered`, `SwapTelemetry`.
+
+## Common Troubleshooting
+
+Decode selector:
 
 ```bash
 cast 4byte-decode <selector-or-revert-data>
 ```
 
-常见做法：
+Common error meanings:
 
-- 先查询 `owner()` / `aiOperator()` 判断权限。
-- 查询 `isPoolEnabled(poolId)` 与 Hook 注册状态。
-- 查询 `usedNonces(poolId, nonce)` 和 `lastRebalanceTimestamp(poolId)`。
-- 查询 `getStrategyConfig(poolId)` 验证 tick width、tick move 和 slippage。
+- `CurrenciesOutOfOrderOrEqual`: PoolKey token ordering is wrong.
+- `InvalidPoolHook`: `PoolKey.hooks` is not the current ManagedLPHook.
+- `PoolNotEnabled`: pool is not bound to the Vault.
+- `NotVaultManager`: sender calling `addPoolToVaultFor` is not owner or aiOperator.
+- `NotOperator`: sender is not owner or aiOperator for the Vault write call.
+- `NotOwner`: an owner-only function was called by a non-owner.
+- `InsufficientIdleBalance`: the pool subaccount does not have enough idle tokens.
+- `OutOfRangePosition`: current tick is outside the planned range and strategy disallows out-of-range positions.
+- `TickMoveTooLarge`: moving an existing active position exceeds the strategy limit.
+- `SlippageExceeded`: actual spent or received amounts violated the plan.

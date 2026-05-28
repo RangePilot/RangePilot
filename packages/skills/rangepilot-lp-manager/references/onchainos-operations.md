@@ -1,144 +1,198 @@
 # OnchainOS Operations
 
-## 目录
+## Contents
 
-- 先决检查
-- chain 参数
-- 安全扫描
-- 合约调用
-- confirming 响应
-- 常用命令模板
-- 测试网处理
+- Prechecks
+- Chain parameters
+- Read-only wallet information
+- Security scan
+- contract-call write transactions
+- Confirming responses
+- DEX swap quote limitations
+- Testnet
+- Common templates
 
-## 先决检查
+## Prechecks
 
-首次运行 `onchainos` 命令前：
+Before using OnchainOS for the first time:
 
-1. 如果仓库存在 `.agents/skills/okx-agentic-wallet/_shared/preflight.md`，先读取并遵循其中的 preflight。
-2. 确认 CLI 可用：
-   ```bash
-   onchainos --version
-   ```
-3. 查看钱包登录状态：
-   ```bash
-   onchainos wallet status
-   ```
-4. 查看当前链地址：
-   ```bash
-   onchainos wallet addresses --chain xlayer
-   ```
+```bash
+onchainos --version
+onchainos wallet status
+onchainos wallet addresses --chain xlayer
+```
 
-如果用户尚未登录，让用户完成 OnchainOS 登录流程；不要让用户在聊天中粘贴私钥或助记词。
+If the user is not logged in, guide them through the OnchainOS login flow. Never ask the user to paste private keys, seed phrases, or keystore passwords into chat.
 
-## chain 参数
+If official OKX skills are installed locally, follow the stricter rules from the relevant OKX skill for wallet, swap, security scan, and gateway tasks. This file documents only the minimal RangePilot-specific interaction flow.
 
-X Layer 主网：
+## Chain Parameters
+
+X Layer mainnet:
 
 ```bash
 --chain xlayer
 ```
 
-也可以使用 chainId：
+Chain ID can also be used:
 
 ```bash
 --chain 196
 ```
 
-如果用户要求测试网，而 OnchainOS 不识别该 chain，不要猜。先说明 OnchainOS 可能只支持主网或有限测试网，然后改用 cast read-only 查询；写交易路径必须让用户确认。
+## Read-Only Wallet Information
 
-## 安全扫描
-
-每笔 EVM 写交易在发送前都要执行：
-
-```bash
-onchainos security tx-scan \
-  --chain <chain> \
-  --from <sender> \
-  --to <contract> \
-  --data <calldata> \
-  --value 0x0
-```
-
-处理规则：
-
-- `action` 为空：可以继续。
-- `action` 为 `warn`：展示风险点，必须得到用户明确确认后才继续。
-- `action` 为 `block`：停止，不发送交易。
-- 扫描命令失败：说明扫描未完成，询问用户是重试还是在无扫描结果下继续；用户不明确确认时停止。
-
-## 合约调用
-
-RangePilot 合约写操作使用：
-
-```bash
-onchainos wallet contract-call \
-  --to <contract> \
-  --chain <chain> \
-  --input-data <calldata> \
-  --amt 0 \
-  --biz-type defi \
-  --strategy rangepilot
-```
-
-规则：
-
-- 首次调用不要带 `--force`。
-- 非 payable 合约函数必须使用 `--amt 0` 或省略；不要附带 native token。
-- `--to` 必须是本次要调用的合约：ERC20 approve 用 token 地址，Vault 操作用 Vault 地址，Factory 操作用 Factory 地址。
-- 如果要指定 sender，使用 `--from <address>`，并确保该地址是 owner 或 aiOperator。
-
-## confirming 响应
-
-`wallet contract-call` 可能返回 confirming 响应并以 exit code 2 退出。处理流程：
-
-1. 展示响应中的 `message`。
-2. 明确问用户是否继续。
-3. 用户确认后，按响应里的 `next` 指令重跑，一般是添加 `--force`。
-4. 用户未确认或拒绝时停止。
-
-永远不要在第一次 `wallet contract-call` 时主动加 `--force`。
-
-## 常用命令模板
-
-### 查询钱包状态
+View the current OnchainOS account:
 
 ```bash
 onchainos wallet status
-onchainos wallet balance --chain xlayer
 onchainos wallet addresses --chain xlayer
 ```
 
-### 扫描并调用
+View balances:
+
+```bash
+onchainos wallet balance --chain xlayer
+onchainos wallet balance --chain xlayer --token-address <token>
+```
+
+Note: OnchainOS may use AA or delegated execution paths. Contract permissions are based on `msg.sender`; do not assume `tx.origin` works. When setting a Vault `aiOperator`, use the EVM/X Layer address returned by `onchainos wallet addresses --chain xlayer`, and confirm permissions with a small or read-only check when possible.
+
+## Security Scan
+
+Every EVM write transaction must be scanned before sending:
 
 ```bash
 onchainos security tx-scan \
   --chain xlayer \
   --from <sender> \
-  --to <contract> \
+  --to <targetContract> \
   --data <calldata> \
   --value 0x0
+```
 
+Handling rules:
+
+- `action == ""` or empty: continue.
+- `action == "warn"`: show the risk and wait for explicit user confirmation.
+- `action == "block"`: stop and do not send.
+- Scan failure is not a safety pass. Explain the failure and ask whether to retry or continue without a scan result.
+
+## contract-call Write Transactions
+
+Use this for RangePilot contract writes:
+
+```bash
 onchainos wallet contract-call \
-  --to <contract> \
+  --to <targetContract> \
   --chain xlayer \
+  --from <sender> \
   --input-data <calldata> \
   --amt 0 \
   --biz-type defi \
   --strategy rangepilot
 ```
 
-### 查看交易历史
+Rules:
+
+- Do not include `--force` on the first attempt.
+- Non-payable functions use `--amt 0`.
+- `--to` is the actual called contract:
+  - `PoolManager.initialize` -> PoolManager
+  - `createVault` / `addPoolToVaultFor` -> VaultFactory
+  - `approve` -> ERC20 token
+  - `deposit` / `rebalance` / `collectFees` / `withdraw` -> UserLPVault
+- Explicitly specify `--from` as owner or aiOperator to avoid using the wrong account.
+
+## Confirming Responses
+
+`onchainos wallet contract-call` may return a confirming response and exit with code 2.
+
+Flow:
+
+1. Show the returned message and confirmation requirement.
+2. Ask the user explicitly whether to continue.
+3. Only after the user confirms, rerun according to the CLI's next instruction, usually adding `--force`.
+4. Stop if the user does not confirm.
+
+Never add `--force` on the first call.
+
+## DEX Swap Quote Limitations
+
+Use the OnchainOS DEX aggregator to check whether a pool or token route may be indexed:
 
 ```bash
-onchainos wallet history --chain xlayer
-onchainos wallet history --chain xlayer --tx-hash <txHash> --address <address>
+onchainos swap quote \
+  --from <fromToken> \
+  --to <toToken> \
+  --readable-amount <amount> \
+  --chain xlayer
 ```
 
-## 测试网处理
+Or execute:
 
-RangePilot 文档中可能存在 `xlayer-testnet` 部署或脚本，但 OnchainOS CLI 未必支持该 chain 名称。遇到测试网：
+```bash
+onchainos swap execute \
+  --from <fromToken> \
+  --to <toToken> \
+  --readable-amount <amount> \
+  --chain xlayer \
+  --wallet <onchainosWallet>
+```
 
-- 先尝试 `onchainos wallet chains` 查看支持列表。
-- 如果不支持，用 `cast call` 读取链上状态。
-- 写交易不要擅自切换到 `cast send`；只有用户明确要求并提供安全签名方式时才可考虑。
-- 如果必须用 `cast send` 或其他方式广播，仍要先用 `cast call`/`eth_call` 模拟，并清楚说明这不是 OnchainOS 路径。
+For RangePilot custom Uniswap v4 Hook pools:
+
+- The OKX DEX aggregator may not immediately index new tokens or custom hook pools.
+- `51006 Input value is too low` may mean the quote layer sees too little value or no valid token price.
+- `82000 Insufficient liquidity` may mean the aggregator found no route; it does not necessarily mean StateView liquidity is 0.
+- If aggregator quote fails, do not conclude the PoolManager pool is unusable. Read StateView `getLiquidity`, tick liquidity, Hook `swapCount`, and PoolManager events.
+- Direct v4 swap testing usually requires a swap helper contract that implements `PoolManager.unlock` callback and settlement logic. Do not ask normal wallets to call `PoolManager.swap` directly.
+
+## Testnet
+
+For testnets:
+
+- First check whether OnchainOS supports the target testnet.
+  ```bash
+  onchainos wallet chains
+  ```
+- If OnchainOS does not support testnet writes, do not switch to mainnet or use `cast send` without explicit user approval.
+- Read-only checks can use `cast call` plus the testnet RPC.
+- The write path must be confirmed by the user.
+
+## Common Templates
+
+### Scan And Call
+
+```bash
+onchainos security tx-scan \
+  --chain xlayer \
+  --from <sender> \
+  --to <target> \
+  --data <calldata> \
+  --value 0x0
+
+onchainos wallet contract-call \
+  --to <target> \
+  --chain xlayer \
+  --from <sender> \
+  --input-data <calldata> \
+  --amt 0 \
+  --biz-type defi \
+  --strategy rangepilot
+```
+
+### View Transaction History
+
+```bash
+onchainos wallet history --chain xlayer --address <onchainosWallet>
+onchainos wallet history --chain xlayer --address <onchainosWallet> --tx-hash <txHash>
+```
+
+### Check Transaction Status, Then Read On-Chain State
+
+After broadcast, do not rely only on txHash. Run:
+
+1. `onchainos wallet history` or Explorer to confirm `SUCCESS`.
+2. `cast call` reads against Vault / Hook / StateView.
+3. Summarize the state changes for the user.

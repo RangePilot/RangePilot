@@ -1,44 +1,39 @@
 # Deployments And Explorer
 
-## 目录
+## Contents
 
-- 使用原则
-- X Layer 主网地址
-- X Layer 测试网地址
-- 用户 Vault 地址
-- XLayer Explorer 查看合约
-- 合约未验证时怎么办
+- Usage rules
+- X Layer mainnet
+- X Layer testnet
+- User Vault addresses
+- Explorer verification
+- Unverified contracts
 
-## 使用原则
+## Usage Rules
 
-此文件是 skill 内部维护的部署地址索引。Agent 安装 skill 后不一定拥有 RangePilot 源码或部署 JSON，因此不要要求读取源码目录。
+This file maintains current RangePilot deployment addresses. A user installing the skill may not have the source tree or deployment JSON files, so workflows must be able to rely only on this file, user-provided addresses, Explorer pages, and ABI signatures.
 
-规则：
+Rules:
 
-- 地址为空或占位时，必须向用户索取或让用户提供 explorer 链接。
-- 不要根据旧聊天、缓存、相似项目或合约名猜地址。
-- 写交易前必须确认 chain 和地址属于同一网络。
-- 如果合约已在 explorer 验证，优先用 explorer 的 Contract/Read/Write/ABI 页面核对接口。
+- Do not guess contracts from old chat history or similar-looking addresses.
+- Before write transactions, confirm that chain, Factory, Hook, PoolManager, and StateView are on the same network.
+- If the user provides a new deployment address in the current task, use the user's explicitly provided address and repeat it back before operating.
+- If an address cannot be verified, stop write transactions.
 
-## X Layer 主网地址
+## X Layer Mainnet
 
-Chain：
-
-- 名称：X Layer
-- OnchainOS chain：`xlayer`
-- chainId：`196`
-- Explorer：`https://www.oklink.com/xlayer`
-
-RangePilot：
+Chain:
 
 ```text
-VaultFactory:                <待部署后填写>
-ManagedLPHook:               <待部署后填写>
-UserLPVault implementation:  <待部署后填写>
-HookCreate2Deployer:         <待部署后填写>
+Name:       X Layer
+OnchainOS: xlayer
+Chain ID:  196
+RPC:       https://rpc.xlayer.tech
+Explorer:  https://www.okx.com/web3/explorer/xlayer
+OKLink:    https://www.oklink.com/xlayer
 ```
 
-Uniswap v4：
+Uniswap v4:
 
 ```text
 PoolManager:      0x360e68faccca8ca495c1b759fd9eee466db9fb32
@@ -46,66 +41,96 @@ PositionManager:  0xcf1eafc6928dc385a342e7c6491d371d2871458b
 StateView:        0x76fd297e2d437cd7f76d50f01afe6160f86e9990
 ```
 
-## X Layer 测试网地址
-
-OnchainOS 未必支持测试网 chain 参数。写交易前必须确认可用执行路径。
+RangePilot:
 
 ```text
-VaultFactory:                <待部署后填写>
-ManagedLPHook:               <待部署后填写>
-UserLPVault implementation:  <待部署后填写>
-PoolManager:                 <待部署后填写>
-StateView:                   <待部署后填写>
-Explorer:                    <待确认>
+VaultFactory:                0xE8c006b5d4A8a2b0CC886c947a8Fd5F1E0eB921A
+ManagedLPHook:               0x29779a886523edEE78187f051635F7A969DC8a40
+UserLPVault implementation:  0x8Aa7b9869Bf6E3566070395bFaE367Ad914BA9e4
+HookCreate2Deployer:         0xF3d973b076B169E65202A0a0c5376A309f8A9B69
+Owner:                       0x2eaE1C6Ff3e9e484eC31F24D0B9E1AAeC7ff0a32
 ```
 
-## 用户 Vault 地址
+Tokens:
 
-每个 owner 有自己的 Vault clone。获取方式：
+```text
+RPT / RangePilot: 0x799C5d3B2725FE35Ba19b3dbA90777DC2B7d43C4
+```
 
-- 用户直接提供 Vault 地址。
-- 通过 Factory 查询：
+Common USDt0:
+
+```text
+USDt0: 0x779ded0c9e1022225f8e0630b35a9b54be713736
+```
+
+## X Layer Testnet
+
+OnchainOS testnet support may differ from mainnet support. Before write transactions, run `onchainos wallet chains` or ask the user to confirm the execution path.
+
+```text
+Name:      X Layer Testnet
+Chain ID: 1952
+RPC:      https://testrpc.xlayer.tech/terigon
+```
+
+Uniswap v4:
+
+```text
+PoolManager: 0x6df5DAE1e6216578e9eC63b239BFa6990AE6ed50
+StateView:   0x1cf2f6b229E313bAC1174F9e6c6a5Cd567F07F3E
+```
+
+RangePilot:
+
+```text
+VaultFactory:                0x9f05221D3E653EC21911F4d91b3054A0E54027C6
+ManagedLPHook:               0x483744FA9563EFaC32a3C7c73AfeBEFA55418a40
+UserLPVault implementation:  0x2Bbc43C6409C7b203670630283139C25cB89358e
+HookCreate2Deployer:         0x175DE2B40dCDe9020C48Ae5AcAbf849E84933C35
+Owner:                       0x2eaE1C6Ff3e9e484eC31F24D0B9E1AAeC7ff0a32
+```
+
+## User Vault Addresses
+
+Each owner has one Vault clone. Retrieve it with:
 
 ```bash
 cast call <vaultFactory> "userVaults(address)(address)" <owner> --rpc-url <rpc>
 ```
 
-确认：
+Confirm the Vault:
 
 ```bash
 cast call <vaultFactory> "isVault(address)(bool)" <vault> --rpc-url <rpc>
 cast call <vault> "owner()(address)" --rpc-url <rpc>
 cast call <vault> "aiOperator()(address)" --rpc-url <rpc>
+cast call <vault> "factory()(address)" --rpc-url <rpc>
+cast call <vault> "hook()(address)" --rpc-url <rpc>
+cast call <vault> "poolManager()(address)" --rpc-url <rpc>
 ```
 
-## XLayer Explorer 查看合约
+## Explorer Verification
 
-主网浏览器地址格式：
+Mainnet address pages:
 
 ```text
-https://www.oklink.com/xlayer/address/<contract-address>
+https://www.okx.com/web3/explorer/xlayer/address/<address>
+https://www.oklink.com/xlayer/address/<address>
 ```
 
-使用方法：
+Verification checklist:
 
-1. 打开地址页面。
-2. 查看 Contract/合约 标签是否已验证。
-3. 如果已验证，检查：
-   - Contract Name 是否是 `VaultFactory`、`ManagedLPHook` 或 `UserLPVault`
-   - ABI 是否包含本 skill 的接口
-   - Read Contract 中的 `owner`、`factory`、`poolManager` 等是否符合预期
-   - Write Contract 函数是否与本 skill 的 calldata 签名一致
-4. 对 Vault clone：
-   - explorer 可能显示为 proxy/clone 或字节码很短
-   - 需要结合 Factory 的 `isVault(vault)` 和 Vault 的 `owner()` 确认
+- The contract is on the correct network.
+- The contract is verified.
+- Contract Name matches: `VaultFactory`, `ManagedLPHook`, `UserLPVault`, `PoolManager`, or `StateView`.
+- ABI contains the interfaces listed in this skill.
+- For Vault clones, prefer Factory `isVault(vault)` and Vault `owner()` / `aiOperator()` checks.
 
-如果用户提供 explorer 链接，先从链接中提取地址和 chain，再继续操作。
+## Unverified Contracts
 
-## 合约未验证时怎么办
+Unverified does not always mean unusable, but it increases risk:
 
-如果 explorer 尚未验证合约：
-
-- 仍可用本 skill 中的 ABI 签名和 `cast call` 读取状态。
-- 不要声称已经核验源码。
-- 写交易前必须更严格确认地址来源：部署交易、官方公告、用户提供的部署记录或 Factory 查询结果。
-- 如果地址来源不可信，停止写交易。
+- Use this skill's ABI signatures and `cast call` for read-only confirmation.
+- Ask the user for a deployment transaction hash, official deployment record, or Explorer link.
+- Before write transactions, repeat the target address, chain, function, and sender.
+- Stop if the address source is not trustworthy.

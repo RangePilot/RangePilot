@@ -1,18 +1,45 @@
 # Protocol Model
 
-## 目录
+## Contents
 
-- RangePilot 是什么
-- 合约角色
-- 多 pool Vault 模型
-- 地址来源
-- 必须确认的信息
+- What RangePilot is
+- Core contracts
+- Multi-pool Vault
+- Permission model
+- Pool lifecycle
+- Address sources
+- Required pre-operation checks
 
-## RangePilot 是什么
+## What RangePilot Is
 
-RangePilot 是一个基于 Uniswap v4 Hook + 用户独立 Vault 的 LP 管理系统。用户资金放在自己的 `UserLPVault` clone 中；AI operator 只是在用户设定的边界内执行 LP rebalance。
+RangePilot is an AI-managed LP system based on Uniswap v4 Hooks and user-owned Vaults. User funds enter the user's own `UserLPVault` clone. The AI operator uses an owner-authorized address to perform rebalance, collect fees, bind pools, and update strategy parameters through the Vault.
 
-当前架构不再是“一 Vault 一 pool”。一个 owner 仍只有一个 Vault，但该 Vault 可以添加多个 Uniswap v4 pool。Vault 内部按 `poolId` 保存独立的 `PoolAccount`：
+Current model:
+
+- At most one Vault per owner.
+- One Vault can manage multiple Uniswap v4 pools.
+- Each pool maps to an independent subaccount inside the Vault.
+- Funds are always held by the Vault; the AI operator never directly receives user assets.
+
+## Core Contracts
+
+### VaultFactory
+
+Factory creates user Vaults and binds Uniswap v4 pools to Vaults.
+
+Key responsibilities:
+
+- `createVault(owner, aiOperator)`: create the owner's unique Vault.
+- `createVaultAndAddPool(owner, aiOperator, key, config)`: create a Vault and bind the first pool.
+- `addPoolToVault(key, config)`: bind a pool using the caller as owner.
+- `addPoolToVaultFor(owner, key, config)`: owner or that owner's Vault aiOperator binds a pool for the owner.
+- During create/bind, Factory asks Hook to register the Vault's LP permission for that pool.
+
+### UserLPVault
+
+Vault holds user tokens and manages multiple LP subaccounts by poolId.
+
+Each pool subaccount stores:
 
 - `PoolKey`
 - `StrategyConfig`
@@ -21,92 +48,111 @@ RangePilot 是一个基于 Uniswap v4 Hook + 用户独立 Vault 的 LP 管理系
 - `lastRebalanceTimestamp`
 - `usedNonces[poolId][nonce]`
 
-## 合约角色
-
 ### ManagedLPHook
 
-共享 Hook，绑定到使用该 Hook 初始化的 Uniswap v4 pool。
+Shared Uniswap v4 Hook that protects LP entrypoints.
 
-职责：
+Responsibilities:
 
-- 只允许已注册 Vault 对指定 `poolId` add/remove liquidity。
-- 验证 tick range 和 tick spacing。
-- 记录 LP 操作和 swap telemetry。
-- 不持有资金，不执行策略。
+- Allow only registered Vaults to add/remove liquidity for a specific pool.
+- Block liquidity modifications from non-registered Vault addresses.
+- Record `swapCount(poolId)` and `lastSwapTimestamp(poolId)`.
+- Does not hold user funds, execute strategies, or swap for users.
 
-### VaultFactory
+### Uniswap v4 PoolManager / StateView
 
-创建每用户唯一 Vault，并给已有 Vault 添加 pool。
+- `PoolManager.initialize(key, sqrtPriceX96)` creates and initializes a v4 pool.
+- `StateView.getSlot0(poolId)` and `getLiquidity(poolId)` read pool state.
+- RangePilot Vault manages LP internally through `PoolManager.unlock -> modifyLiquidity`.
 
-核心入口：
+## Multi-Pool Vault
 
-- `createVault(owner, aiOperator)`
-- `createVaultAndAddPool(owner, aiOperator, key, config)`
-- `addPoolToVault(key, config)`
+One Vault can bind multiple pools. Treat each pool as a separate account:
 
-### UserLPVault
+- idle0/idle1 for `poolId A` can only be used for rebalancing `poolId A`.
+- nonce is independent per poolId.
+- active position is independent per poolId.
+- withdrawing one pool should not affect other pools.
 
-持有用户资金并管理多个 pool 子账户。
+Even if two pools use the same token pair, do not move balance from one pool to another.
 
-权限：
+## Permission Model
 
-- owner：`deposit`、`withdraw`、`emergencyExit`、`updateStrategyConfig`、`updateAIOperator`、`revokeAIOperator`
-- aiOperator 或 owner：`rebalance`、`collectFees`
-- Factory：`addPool`
+### owner
 
-## 多 pool Vault 模型
+Owner can:
 
-每个 pool 都有自己的 token 对、策略、头寸和 idle 余额。即使两个 pool 使用同一对 token，也不能互相挪用余额。
+- Create Vault.
+- deposit.
+- withdraw / emergencyExit.
+- updateAIOperator / revokeAIOperator.
+- rebalance / collectFees.
+- updateStrategyConfig.
+- addPoolToVault / addPoolToVaultFor.
 
-Agent 在任何写操作前必须确认：
+### aiOperator
 
-- 当前 `poolId` 已在 Vault 中启用：`isPoolEnabled(poolId) == true`
-- Hook 已注册 Vault：`registeredVaultForPool(poolId, vault) == true`
-- 当前钱包角色匹配操作权限
-- 当前操作只影响用户指定的 pool
+aiOperator can:
 
-## 地址来源
+- rebalance.
+- collectFees.
+- updateStrategyConfig.
+- bind a pool for the owner through `VaultFactory.addPoolToVaultFor(owner, key, config)`.
 
-不要假设安装 skill 的 agent 拥有 RangePilot 源码仓库、`packages/contracts` 目录或部署 JSON。地址来源按优先级：
+aiOperator cannot:
 
-- 用户明确提供的地址。
-- `references/deployments-and-explorer.md` 中维护的已部署地址。
-- XLayer Explorer 上已验证的合约页面。
-- 如果当前工作区恰好包含项目源码和 deployment 文件，可以辅助读取，但不能把它作为 skill 的必要前提。
+- deposit.
+- withdraw / emergencyExit.
+- updateAIOperator / revokeAIOperator.
+- create the owner's Vault.
 
-如果缺少以下地址，向用户索取或引导用户到 XLayer Explorer 确认，不要猜：
+## Pool Lifecycle
+
+Typical sequence:
+
+1. Choose tokenA/tokenB and sort them into `currency0/currency1` by address.
+2. Build `PoolKey(currency0, currency1, fee, tickSpacing, managedLPHook)`.
+3. Create the v4 pool with `PoolManager.initialize(key, sqrtPriceX96)`.
+4. Get or calculate poolId.
+5. Create a Vault, or read the owner's existing Vault.
+6. Use Factory to bind the pool to the Vault and register Hook permission.
+7. Owner approves token0/token1 to the Vault.
+8. Owner calls Vault `deposit(poolId, amount0, amount1)`.
+9. Owner or aiOperator calls Vault `rebalance(plan)` to add/adjust LP.
+10. Later operations include collect fees, rebalance, and withdraw.
+
+Important: creating a pool does not bind the Vault; binding the Vault does not deposit funds; deposit does not mean active LP already exists.
+
+## Address Sources
+
+Do not guess addresses. Priority:
+
+1. Explicit user-provided address in the current task.
+2. Deployed addresses maintained in `references/deployments-and-explorer.md`.
+3. Verified contract page on Explorer.
+4. Deployment JSON in the current workspace only as a helper, not as a skill prerequisite.
+
+If any of the following are missing, ask the user or guide them to verify via Explorer:
 
 - `vaultFactory`
 - `managedLPHook`
-- `userLPVaultImplementation`
-- 用户自己的 `vault`
-- `stateView`
 - `poolManager`
+- `stateView`
+- user Vault
+- owner
+- aiOperator
+- token0/token1
 - RPC URL
 
-## 必须确认的信息
+## Required Pre-Operation Checks
 
-创建或管理 pool 前收集：
+Before write transactions:
 
-- chain：默认 `xlayer`，测试网需确认 OnchainOS 是否支持
-- owner 地址
-- aiOperator 地址
-- Factory 地址
-- Hook 地址
-- tokenA/tokenB 地址
-- fee，如 `3000`
-- tickSpacing，如 `60`
-- StrategyConfig
-- 是否已有 Vault
-
-生成 RebalancePlan 前收集：
-
-- vault 地址
-- poolId
-- 当前 tick
-- activePosition
-- pool idle balance
-- StrategyConfig
-- 上次 rebalance 时间
-- nonce 是否已用
-- 用户目标：加仓、撤仓、移动 range、收窄/放宽、只 collect fees 等
+- chain matches all addresses.
+- sender has the required role.
+- `PoolKey.hooks == ManagedLPHook`.
+- token ordering is `currency0 < currency1`.
+- Vault belongs to the current Factory: `factory.isVault(vault) == true`.
+- Vault `factory()`, `hook()`, and `poolManager()` match deployment addresses.
+- If the pool is expected to be bound: `vault.isPoolEnabled(poolId) == true`.
+- Hook is registered: `hook.registeredVaultForPool(poolId, vault) == true`.
