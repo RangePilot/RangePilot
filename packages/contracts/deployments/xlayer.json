@@ -5,5 +5,14 @@
     "poolManager": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
     "positionManager": "0xcf1eafc6928dc385a342e7c6491d371d2871458b",
     "stateView": "0x76fd297e2d437cd7f76d50f01afe6160f86e9990"
+  },
+  "rangePilot": {
+    "hookCreate2Deployer": "0x90c840126b6E22B9F66d2B4a865F7be052EB95d5",
+    "managedLPHook": "0x2a8998C7BcC6Fc82e4FFc5aD01C204281efaca40",
+    "owner": "0x2eaE1C6Ff3e9e484eC31F24D0B9E1AAeC7ff0a32",
+    "poolManager": "0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32",
+    "stateView": "0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990",
+    "userLPVaultImplementation": "0x9Ec5a133fE389C0A3B3D82eB9c6b3B8f3F995aaF",
+    "vaultFactory": "0x70283557C4cE4637B7332c71b73d88978952031f"
   }
 }
