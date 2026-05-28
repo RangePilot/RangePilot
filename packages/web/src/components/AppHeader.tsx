@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CircleNotch, SignOut, TrendUp, Wallet } from '@phosphor-icons/react'
+import { CircleNotch, SignOut, Wallet } from '@phosphor-icons/react'
 import type { Address } from 'viem'
 import { formatAddress } from '../utils/format'
 import type { BrowserConnector } from '../utils/connectors'
@@ -37,7 +37,7 @@ export function AppHeader({
     <header className="topbar" aria-label="RangePilot console header">
       <div className="brand-lockup">
         <div className="brand-mark" aria-hidden="true">
-          <TrendUp size={18} weight="bold" />
+          <img src="/rangepilot-icon-light.png" alt="" />
         </div>
         <div>
           <h1>RangePilot</h1>

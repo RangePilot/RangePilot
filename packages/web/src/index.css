@@ -119,8 +119,15 @@ code {
 }
 
 .brand-mark {
-  background: var(--ink);
-  color: var(--surface);
+  background: transparent;
+  color: inherit;
+  overflow: hidden;
+}
+
+.brand-mark img {
+  display: block;
+  height: 36px;
+  width: 36px;
 }
 
 .eyebrow {
