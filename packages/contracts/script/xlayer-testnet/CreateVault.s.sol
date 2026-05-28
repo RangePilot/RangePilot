@@ -23,15 +23,6 @@ contract CreateXLayerTestnetVault is Script {
         console2.log("Vault", vault);
         console2.log("Owner", owner);
         console2.log("AI operator", aiOperator);
-
-        _ensureBaseDeployment();
-
-        string memory object = "latestVault";
-        vm.serializeAddress(object, "vaultFactory", address(factory));
-        vm.serializeAddress(object, "owner", owner);
-        vm.serializeAddress(object, "aiOperator", aiOperator);
-        string memory json = vm.serializeAddress(object, "vault", vault);
-        vm.writeJson(json, OUTPUT_PATH, ".latestVault");
     }
 
     function _vaultFactory() internal view returns (address vaultFactory) {
@@ -45,14 +36,5 @@ contract CreateXLayerTestnetVault is Script {
             require(json.keyExists(".rangePilot.vaultFactory"), "XLAYER_TESTNET_VAULT_FACTORY_NOT_FOUND");
             vaultFactory = json.readAddress(".rangePilot.vaultFactory");
         }
-    }
-
-    function _ensureBaseDeployment() internal {
-        if (vm.isFile(OUTPUT_PATH)) return;
-
-        string memory object = "xlayer-testnet";
-        vm.serializeString(object, "chain", "xlayer-testnet");
-        string memory json = vm.serializeUint(object, "chainId", 1952);
-        vm.writeJson(json, OUTPUT_PATH);
     }
 }

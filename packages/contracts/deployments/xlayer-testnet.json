@@ -14,33 +14,5 @@
     "stateView": "0x1cf2f6b229E313bAC1174F9e6c6a5Cd567F07F3E",
     "userLPVaultImplementation": "0x891b18269E7dAC84048e8e9aC7755CA86AD3Dec4",
     "vaultFactory": "0x5f1F70a33B9E3D52400d16a5d8D53cD548658641"
-  },
-  "latestVault": {
-    "aiOperator": "0x5cB6D8e5491ebf1cBe5B099694eE988Ae58d1750",
-    "owner": "0x2eaE1C6Ff3e9e484eC31F24D0B9E1AAeC7ff0a32",
-    "vault": "0x983658f324C9a73aD2f650530257e1A324887bf7",
-    "vaultFactory": "0x5f1F70a33B9E3D52400d16a5d8D53cD548658641"
-  },
-  "latestPool": {
-    "fee": 100,
-    "hook": "0x4e3b8edC94064AC4E8774F8f06e1f3aA6bcA8A40",
-    "initialAmount0": 5000000,
-    "initialAmount1": 5000000,
-    "initialLiquidity": 1002552082,
-    "initialLiquidityAdded": true,
-    "initialTickLower": -100,
-    "initialTickUpper": 100,
-    "poolId": "0xb66f3b888223eafafbad9dcea1af3c57eae6cfebf5629f2c81a9902d644c251e",
-    "poolLiquidityBefore": 0,
-    "poolManager": "0x6df5DAE1e6216578e9eC63b239BFa6990AE6ed50",
-    "sqrtPriceX96": "79228162514264337593543950336",
-    "tick": 0,
-    "tickSpacing": 1,
-    "token0": "0x9e29b3AaDa05Bf2D2c827Af80Bd28Dc0b9b4FB0c",
-    "token1": "0xcB8BF24c6cE16Ad21D707c9505421a17f2bec79D",
-    "vault": "0x983658f324C9a73aD2f650530257e1A324887bf7",
-    "vaultFactory": "0x5f1F70a33B9E3D52400d16a5d8D53cD548658641",
-    "vaultOwner": "0x2eaE1C6Ff3e9e484eC31F24D0B9E1AAeC7ff0a32",
-    "vaultPositionLiquidityBefore": 0
   }
 }

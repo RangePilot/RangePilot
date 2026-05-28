@@ -116,23 +116,6 @@ contract CreateXLayerTestnetPoolAndBindVault is Script {
         console2.log("tickSpacing", key.tickSpacing);
         console2.log("sqrtPriceX96", uint256(sqrtPriceX96));
         console2.log("initialTick", initialTick);
-
-        _ensureBaseDeployment();
-        _writeLatestPool(
-            address(poolManager),
-            hook,
-            address(factory),
-            vault,
-            vaultOwner,
-            key,
-            poolId,
-            sqrtPriceX96,
-            initialTick,
-            poolLiquidityBefore,
-            vaultPositionLiquidityBefore,
-            initialLiquidityAdded,
-            initialLiquidity
-        );
     }
 
     function _addInitialLiquidity(address vault, PoolKey memory key, PoolId poolId, uint160 sqrtPriceX96)
@@ -235,53 +218,5 @@ contract CreateXLayerTestnetPoolAndBindVault is Script {
         }
 
         require(value != address(0), errorMessage);
-    }
-
-    function _writeLatestPool(
-        address poolManager,
-        address hook,
-        address factory,
-        address vault,
-        address vaultOwner,
-        PoolKey memory key,
-        PoolId poolId,
-        uint160 sqrtPriceX96,
-        int24 initialTick,
-        uint128 poolLiquidityBefore,
-        uint128 vaultPositionLiquidityBefore,
-        bool initialLiquidityAdded,
-        uint128 initialLiquidity
-    ) internal {
-        string memory object = "latestPool";
-        vm.serializeAddress(object, "poolManager", poolManager);
-        vm.serializeAddress(object, "hook", hook);
-        vm.serializeAddress(object, "vaultFactory", factory);
-        vm.serializeAddress(object, "vault", vault);
-        vm.serializeAddress(object, "vaultOwner", vaultOwner);
-        vm.serializeAddress(object, "token0", Currency.unwrap(key.currency0));
-        vm.serializeAddress(object, "token1", Currency.unwrap(key.currency1));
-        vm.serializeUint(object, "fee", key.fee);
-        vm.serializeInt(object, "tickSpacing", key.tickSpacing);
-        vm.serializeString(object, "sqrtPriceX96", vm.toString(uint256(sqrtPriceX96)));
-        vm.serializeInt(object, "tick", initialTick);
-        vm.serializeInt(object, "initialTickLower", INITIAL_TICK_LOWER);
-        vm.serializeInt(object, "initialTickUpper", INITIAL_TICK_UPPER);
-        vm.serializeUint(object, "initialAmount0", INITIAL_AMOUNT0);
-        vm.serializeUint(object, "initialAmount1", INITIAL_AMOUNT1);
-        vm.serializeUint(object, "poolLiquidityBefore", poolLiquidityBefore);
-        vm.serializeUint(object, "vaultPositionLiquidityBefore", vaultPositionLiquidityBefore);
-        vm.serializeBool(object, "initialLiquidityAdded", initialLiquidityAdded);
-        vm.serializeUint(object, "initialLiquidity", initialLiquidity);
-        string memory json = vm.serializeBytes32(object, "poolId", PoolId.unwrap(poolId));
-        vm.writeJson(json, OUTPUT_PATH, ".latestPool");
-    }
-
-    function _ensureBaseDeployment() internal {
-        if (vm.isFile(OUTPUT_PATH)) return;
-
-        string memory object = "xlayer-testnet";
-        vm.serializeString(object, "chain", "xlayer-testnet");
-        string memory json = vm.serializeUint(object, "chainId", 1952);
-        vm.writeJson(json, OUTPUT_PATH);
     }
 }

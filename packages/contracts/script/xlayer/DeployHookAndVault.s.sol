@@ -10,17 +10,17 @@ import {ManagedLPHook} from "../../src/ManagedLPHook.sol";
 import {UserLPVault} from "../../src/UserLPVault.sol";
 import {VaultFactory} from "../../src/VaultFactory.sol";
 
-contract DeployXLayerTestnetHookAndVault is Script {
+contract DeployXLayerHookAndVault is Script {
     using stdJson for string;
 
-    string internal constant OUTPUT_PATH = "deployments/xlayer-testnet.json";
+    string internal constant OUTPUT_PATH = "deployments/xlayer.json";
 
     function run()
         external
         returns (HookCreate2Deployer hookDeployer, ManagedLPHook hook, UserLPVault implementation, VaultFactory factory)
     {
         IPoolManager poolManager = _poolManager();
-        address stateView = _optionalAddress("STATE_VIEW", "XLAYER_TESTNET_STATE_VIEW", ".uniswapV4.stateView");
+        address stateView = _optionalAddress("STATE_VIEW", "XLAYER_STATE_VIEW", ".uniswapV4.stateView");
         address owner = vm.envAddress("RANGEPILOT_OWNER");
 
         bytes memory hookArgs = abi.encode(poolManager, owner);
@@ -47,26 +47,21 @@ contract DeployXLayerTestnetHookAndVault is Script {
         console2.log("Owner", owner);
 
         _ensureBaseDeployment();
-
-        string memory object = "rangePilot";
-        vm.serializeAddress(object, "hookCreate2Deployer", address(hookDeployer));
-        vm.serializeAddress(object, "managedLPHook", address(hook));
-        vm.serializeAddress(object, "userLPVaultImplementation", address(implementation));
-        vm.serializeAddress(object, "vaultFactory", address(factory));
-        vm.serializeAddress(object, "poolManager", address(poolManager));
-        if (stateView != address(0)) vm.serializeAddress(object, "stateView", stateView);
-        string memory json = vm.serializeAddress(object, "owner", owner);
-        vm.writeJson(json, OUTPUT_PATH, ".rangePilot");
+        _writeRangePilot(
+            address(hookDeployer),
+            address(hook),
+            address(implementation),
+            address(factory),
+            address(poolManager),
+            stateView,
+            owner
+        );
     }
 
     function _poolManager() internal view returns (IPoolManager) {
         address poolManager = vm.envOr("POOL_MANAGER", address(0));
-        if (poolManager == address(0)) {
-            poolManager = vm.envOr("XLAYER_TESTNET_POOL_MANAGER", address(0));
-        }
-        if (poolManager == address(0)) {
-            poolManager = _readDeploymentAddress(".uniswapV4.poolManager");
-        }
+        if (poolManager == address(0)) poolManager = vm.envOr("XLAYER_POOL_MANAGER", address(0));
+        if (poolManager == address(0)) poolManager = _readDeploymentAddress(".uniswapV4.poolManager");
 
         require(poolManager != address(0), "POOL_MANAGER_NOT_SET");
         return IPoolManager(poolManager);
@@ -86,18 +81,38 @@ contract DeployXLayerTestnetHookAndVault is Script {
     }
 
     function _readDeploymentAddress(string memory key) internal view returns (address) {
-        require(vm.isFile(OUTPUT_PATH), "XLAYER_TESTNET_DEPLOYMENT_NOT_FOUND");
+        require(vm.isFile(OUTPUT_PATH), "XLAYER_DEPLOYMENT_NOT_FOUND");
         string memory json = vm.readFile(OUTPUT_PATH);
-        require(json.keyExists(key), "XLAYER_TESTNET_V4_KEY_NOT_FOUND");
+        require(json.keyExists(key), "XLAYER_V4_KEY_NOT_FOUND");
         return json.readAddress(key);
     }
 
     function _ensureBaseDeployment() internal {
         if (vm.isFile(OUTPUT_PATH)) return;
 
-        string memory object = "xlayer-testnet";
-        vm.serializeString(object, "chain", "xlayer-testnet");
-        string memory json = vm.serializeUint(object, "chainId", 1952);
+        string memory object = "xlayer";
+        vm.serializeString(object, "chain", "xlayer");
+        string memory json = vm.serializeUint(object, "chainId", 196);
         vm.writeJson(json, OUTPUT_PATH);
+    }
+
+    function _writeRangePilot(
+        address hookDeployer,
+        address hook,
+        address implementation,
+        address factory,
+        address poolManager,
+        address stateView,
+        address owner
+    ) internal {
+        string memory object = "rangePilot";
+        vm.serializeAddress(object, "hookCreate2Deployer", hookDeployer);
+        vm.serializeAddress(object, "managedLPHook", hook);
+        vm.serializeAddress(object, "userLPVaultImplementation", implementation);
+        vm.serializeAddress(object, "vaultFactory", factory);
+        vm.serializeAddress(object, "poolManager", poolManager);
+        if (stateView != address(0)) vm.serializeAddress(object, "stateView", stateView);
+        string memory json = vm.serializeAddress(object, "owner", owner);
+        vm.writeJson(json, OUTPUT_PATH, ".rangePilot");
     }
 }
