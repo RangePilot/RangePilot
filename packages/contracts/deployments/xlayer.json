@@ -14,5 +14,8 @@
     "stateView": "0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990",
     "userLPVaultImplementation": "0x9Ec5a133fE389C0A3B3D82eB9c6b3B8f3F995aaF",
     "vaultFactory": "0x70283557C4cE4637B7332c71b73d88978952031f"
+  },
+  "tokens": {
+    "rangePilot": "0x799C5d3B2725FE35Ba19b3dbA90777DC2B7d43C4"
   }
 }
