@@ -10,8 +10,10 @@ export type DeploymentConfig = {
 
 const MAINNET_POOL_MANAGER = '0x360e68faccca8ca495c1b759fd9eee466db9fb32'
 const MAINNET_STATE_VIEW = '0x76fd297e2d437cd7f76d50f01afe6160f86e9990'
-const TESTNET_VAULT_FACTORY = '0x5f1F70a33B9E3D52400d16a5d8D53cD548658641'
-const TESTNET_MANAGED_LP_HOOK = '0x4e3b8edC94064AC4E8774F8f06e1f3aA6bcA8A40'
+const MAINNET_VAULT_FACTORY = '0x70283557C4cE4637B7332c71b73d88978952031f'
+const MAINNET_MANAGED_LP_HOOK = '0x2a8998C7BcC6Fc82e4FFc5aD01C204281efaca40'
+const TESTNET_VAULT_FACTORY = '0x5f90e8e893200dfeF11594cC5539C9A55cd9C21D'
+const TESTNET_MANAGED_LP_HOOK = '0xBdcD07390f9dd09BfaDdbb525D35a5eDFE4b0a40'
 const TESTNET_POOL_MANAGER = '0x6df5DAE1e6216578e9eC63b239BFa6990AE6ed50'
 const TESTNET_STATE_VIEW = '0x1cf2f6b229E313bAC1174F9e6c6a5Cd567F07F3E'
 
@@ -32,8 +34,8 @@ function readAddress(key: string, fallback?: string): Address | undefined {
 
 export const deploymentsByChainId: Record<number, DeploymentConfig> = {
   [xLayer.id]: {
-    vaultFactory: readAddress('XLAYER_VAULT_FACTORY'),
-    managedLPHook: readAddress('XLAYER_MANAGED_LP_HOOK'),
+    vaultFactory: readAddress('XLAYER_VAULT_FACTORY', MAINNET_VAULT_FACTORY),
+    managedLPHook: readAddress('XLAYER_MANAGED_LP_HOOK', MAINNET_MANAGED_LP_HOOK),
     poolManager: readAddress('XLAYER_POOL_MANAGER', MAINNET_POOL_MANAGER),
     stateView: readAddress('XLAYER_STATE_VIEW', MAINNET_STATE_VIEW),
   },
