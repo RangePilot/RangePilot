@@ -13,18 +13,76 @@
 
 | Section | What It Covers |
 |---|---|
+| [Quickstart](#quickstart) | Install the RangePilot skill, create a Vault, and manage LP through AI prompts |
 | [Overview](#overview) | RangePilot's positioning, core idea, and user fund boundaries |
 | [Problems](#problems) | Concentrated liquidity complexity, AI execution boundaries, multi-pool management, and Hook pool workflows |
 | [Solution](#solution) | How Hook, Vault, and Factory work together |
 | [Architecture](#architecture) | Protocol component diagram and lifecycle from Vault creation to rebalance |
 | [Core Contracts](#core-contracts) | Main contract responsibilities and owner / AI operator permissions |
-| [Quickstart](#quickstart) | Install the RangePilot skill, create a Vault, and manage LP through AI prompts |
 | [Deployments](#deployments) | X Layer Mainnet / Testnet contract addresses and Explorer links |
 | [Security Model](#security-model) | Vault custody, Hook access control, multi-pool isolation, and risk checks |
 | [Roadmap](#roadmap) | Short-term plan |
 | [Repository](#repository) | Monorepo structure |
 | [License](#license) | Project license |
 | [Disclaimer](#disclaimer) | Risk notice |
+
+---
+
+## Quickstart
+
+The recommended RangePilot workflow is to install the project skill, then interact with an AI agent that supports skills. Users do not need to manually build calldata or memorize Uniswap v4 internals; they can tell the AI what they want to do with their Vault and LP positions.
+
+### 1. Install RangePilot Skill
+
+```bash
+npx skills add https://github.com/RangePilot/RangePilot
+```
+
+After installation, the AI can read RangePilot's project description, deployment addresses, contract interfaces, OnchainOS workflow, and risk controls.
+
+### 2. Create Your Vault
+
+Get your OnchainOS EVM address:
+
+```bash
+onchainos wallet addresses --chain xlayer
+```
+
+Then visit:
+
+```text
+https://www.rangepilot.xyz
+```
+
+Connect your wallet, create a Vault, and enter your OnchainOS EVM address as `AI Operator`. After the Vault is created, AI can help bind pools, read state, and execute rebalance within your authorization. deposit and withdraw still require the owner wallet.
+
+### 3. Start Talking To AI
+
+Example prompts:
+
+```text
+Show me my RangePilot Vault status on X Layer.
+```
+
+```text
+This is my Vault address: 0x... Please check owner, AI Operator, bound pools, and current LP positions.
+```
+
+```text
+Create a Uniswap v4 pool with the RangePilot hook for <TokenA> / <TokenB>.
+```
+
+```text
+Bind this pool to my Vault: 0x...
+```
+
+```text
+I deposited 5 <TokenA> and 200000 <TokenB>. Add an LP position around the current price with a +/- <x> tick range.
+```
+
+```text
+Check whether my current position is drifting out of range. If needed, generate and execute a rebalance.
+```
 
 ---
 
@@ -145,66 +203,6 @@ sequenceDiagram
 | updateStrategyConfig | yes | yes | no |
 | withdraw / emergencyExit | yes | no | no |
 | updateAIOperator / revokeAIOperator | yes | no | no |
-
----
-
-## Quickstart
-
-The recommended RangePilot workflow is to install the project skill, then interact with an AI agent that supports skills. Users do not need to manually build calldata or memorize Uniswap v4 internals; they can tell the AI what they want to do with their Vault and LP positions.
-
-### 1. Install RangePilot Skill
-
-```bash
-npx skills add https://github.com/RangePilot/RangePilot
-```
-
-After installation, the AI can read RangePilot's project description, deployment addresses, contract interfaces, OnchainOS workflow, and risk controls.
-
-### 2. Create Your Vault
-
-Get your OnchainOS EVM address:
-
-```bash
-onchainos wallet addresses --chain xlayer
-```
-
-Then visit:
-
-```text
-https://www.rangepilot.xyz
-```
-
-Connect your wallet, create a Vault, and enter your OnchainOS EVM address as `AI Operator`. After the Vault is created, AI can help bind pools, read state, and execute rebalance within your authorization. deposit and withdraw still require the owner wallet.
-
-### 3. Start Talking To AI
-
-Example prompts:
-
-```text
-Show me my RangePilot Vault status on X Layer.
-```
-
-```text
-This is my Vault address: 0x... Please check owner, AI Operator, bound pools, and current LP positions.
-```
-
-```text
-Create a Uniswap v4 pool with the RangePilot hook for <TokenA> / <TokenB>.
-```
-
-```text
-Bind this pool to my Vault: 0x...
-```
-
-```text
-I deposited 5 <TokenA> and 200000 <TokenB>. Add an LP position around the current price with a +/- <x> tick range.
-```
-
-```text
-Check whether my current position is drifting out of range. If needed, generate and execute a rebalance.
-```
-
----
 
 ## Deployments
 

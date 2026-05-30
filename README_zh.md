@@ -4,18 +4,76 @@
 
 | 章节 | 内容 |
 |---|---|
+| [Quickstart](#quickstart) | 安装 RangePilot skill，并通过示例 prompt 和 AI 对话管理 LP |
 | [项目简介](#项目简介) | RangePilot 的定位、核心理念和用户资产边界 |
 | [核心问题](#核心问题) | 集中流动性、AI 执行权限、多 pool 管理和 Hook pool 操作门槛 |
 | [解决方案](#解决方案) | Hook、Vault、Factory 三层架构如何协作 |
 | [架构总览](#架构总览) | 协议组件关系图和从创建 Vault 到 rebalance 的生命周期 |
 | [核心合约](#核心合约) | 主要合约职责与 owner / AI operator 权限摘要 |
-| [Quickstart](#quickstart) | 安装 RangePilot skill，并通过示例 prompt 和 AI 对话管理 LP |
 | [当前部署](#当前部署) | X Layer Mainnet / Testnet 已部署合约地址与 Explorer 链接 |
 | [安全模型](#安全模型) | Vault 资产托管、Hook 访问控制、多 pool 隔离和风控检查 |
 | [路线图](#路线图) | Short Term 计划 |
 | [Repository](#repository) | Monorepo 目录结构 |
 | [License](#license) | 项目许可证 |
 | [Disclaimer](#disclaimer) | 风险提示 |
+
+---
+
+## Quickstart
+
+RangePilot 的推荐使用方式是：先安装项目 skill，然后直接和支持 skills 的 AI agent 对话。用户不需要手动拼接合约 calldata，也不需要记住 Uniswap v4 的底层参数；只需要告诉 AI 自己想创建 Vault、绑定 pool、deposit 或管理 LP 头寸。
+
+### 1. 安装 RangePilot Skill
+
+```bash
+npx skills add https://github.com/RangePilot/RangePilot
+```
+
+安装完成后，AI 会读取 RangePilot 的项目说明、部署地址、合约接口、OnchainOS 操作流程和风控边界，并据此协助用户完成链上交互。
+
+### 2. 创建你的 Vault
+
+先获取你的 OnchainOS EVM 地址：
+
+```bash
+onchainos wallet addresses --chain xlayer
+```
+
+然后访问：
+
+```text
+https://www.rangepilot.xyz
+```
+
+连接钱包后创建 Vault，并把你的 OnchainOS EVM 地址填入 `AI Operator`。创建完成后，AI 就可以在你的授权范围内帮助绑定 pool、读取状态并执行 rebalance。deposit 和 withdraw 仍然需要 owner 钱包自己确认。
+
+### 3. 开始和 AI 对话
+
+你可以直接使用类似下面的 prompt：
+
+```text
+帮我查看我在 X Layer 上的 RangePilot Vault 状态。
+```
+
+```text
+这是我的 Vault 地址：0x...，帮我检查 owner、AI Operator、已绑定的 pool 和当前 LP 头寸。
+```
+
+```text
+帮我创建一个带 RangePilot hook 的 Uniswap v4 pool，交易对是 <TokenA> / <TokenB>。
+```
+
+```text
+把这个 pool 绑定到我的 Vault：0x...
+```
+
+```text
+我已经 deposit 了 5 <TokenA> 和 200000 <TokenB>，帮我在当前价格上下 <x> tick 添加 LP 头寸。
+```
+
+```text
+帮我检查当前头寸是否偏离区间，如果需要，请生成并执行一次 rebalance。
+```
 
 ---
 
@@ -136,66 +194,6 @@ sequenceDiagram
 | updateStrategyConfig | yes | yes | no |
 | withdraw / emergencyExit | yes | no | no |
 | updateAIOperator / revokeAIOperator | yes | no | no |
-
----
-
-## Quickstart
-
-RangePilot 的推荐使用方式是：先安装项目 skill，然后直接和支持 skills 的 AI agent 对话。用户不需要手动拼接合约 calldata，也不需要记住 Uniswap v4 的底层参数；只需要告诉 AI 自己想创建 Vault、绑定 pool、deposit 或管理 LP 头寸。
-
-### 1. 安装 RangePilot Skill
-
-```bash
-npx skills add https://github.com/RangePilot/RangePilot
-```
-
-安装完成后，AI 会读取 RangePilot 的项目说明、部署地址、合约接口、OnchainOS 操作流程和风控边界，并据此协助用户完成链上交互。
-
-### 2. 创建你的 Vault
-
-先获取你的 OnchainOS EVM 地址：
-
-```bash
-onchainos wallet addresses --chain xlayer
-```
-
-然后访问：
-
-```text
-https://www.rangepilot.xyz
-```
-
-连接钱包后创建 Vault，并把你的 OnchainOS EVM 地址填入 `AI Operator`。创建完成后，AI 就可以在你的授权范围内帮助绑定 pool、读取状态并执行 rebalance。deposit 和 withdraw 仍然需要 owner 钱包自己确认。
-
-### 3. 开始和 AI 对话
-
-你可以直接使用类似下面的 prompt：
-
-```text
-帮我查看我在 X Layer 上的 RangePilot Vault 状态。
-```
-
-```text
-这是我的 Vault 地址：0x...，帮我检查 owner、AI Operator、已绑定的 pool 和当前 LP 头寸。
-```
-
-```text
-帮我创建一个带 RangePilot hook 的 Uniswap v4 pool，交易对是 <TokenA> / <TokenB>。
-```
-
-```text
-把这个 pool 绑定到我的 Vault：0x...
-```
-
-```text
-我已经 deposit 了 5 <TokenA> 和 200000 <TokenB>，帮我在当前价格上下 <x> tick 添加 LP 头寸。
-```
-
-```text
-帮我检查当前头寸是否偏离区间，如果需要，请生成并执行一次 rebalance。
-```
-
----
 
 ## 当前部署
 
