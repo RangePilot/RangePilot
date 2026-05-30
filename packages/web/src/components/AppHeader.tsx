@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CircleNotch, SignOut, Wallet } from '@phosphor-icons/react'
+import { ArrowUpRight, At, CircleNotch, GithubLogo, SignOut, Wallet } from '@phosphor-icons/react'
 import type { Address } from 'viem'
 import { formatAddress } from '../utils/format'
 import type { BrowserConnector } from '../utils/connectors'
@@ -43,6 +43,19 @@ export function AppHeader({
           <h1>RangePilot</h1>
         </div>
       </div>
+
+      <nav className="project-links" aria-label="RangePilot project links">
+        <a href="https://github.com/RangePilot/RangePilot" target="_blank" rel="noreferrer">
+          <GithubLogo size={18} weight="bold" />
+          <span>GitHub</span>
+          <ArrowUpRight className="external-link-icon" size={14} weight="bold" />
+        </a>
+        <a href="https://x.com/range_pilot" target="_blank" rel="noreferrer">
+          <At size={18} weight="bold" />
+          <span>Twitter</span>
+          <ArrowUpRight className="external-link-icon" size={14} weight="bold" />
+        </a>
+      </nav>
 
       <div className="topbar-actions">
         <NetworkSwitcher
